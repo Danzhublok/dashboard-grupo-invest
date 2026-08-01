@@ -1,0 +1,8 @@
+[build]
+  command = "npm install && npm run build"
+  publish = ".output/public"
+  functions = ".output/server"
+
+[dev]
+  command = "npm run dev"
+  port = 4173
