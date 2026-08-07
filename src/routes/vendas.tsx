@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -36,9 +36,27 @@ function VendasPage() {
 
   const colaboradoresDaRep = repSelecionada?.colaboradores ?? [];
 
+  useEffect(() => {
+    if (!selectedRep && dados.representacoes.length > 0) {
+      const primeiraRep = dados.representacoes[0];
+      setSelectedRep(primeiraRep.id);
+      setSelectedColaborador(primeiraRep.colaboradores[0]?.id ?? "");
+    }
+  }, [dados.representacoes, selectedRep]);
+
+  useEffect(() => {
+    const repAtual = dados.representacoes.find((rep) => rep.id === selectedRep);
+    if (!repAtual) return;
+
+    if (!repAtual.colaboradores.some((colaborador) => colaborador.id === selectedColaborador)) {
+      setSelectedColaborador(repAtual.colaboradores[0]?.id ?? "");
+    }
+  }, [dados.representacoes, selectedColaborador, selectedRep]);
+
   const onAbrirModal = () => {
-    setSelectedRep(dados.representacoes[0]?.id ?? "");
-    setSelectedColaborador("");
+    const primeiraRep = dados.representacoes[0];
+    setSelectedRep(primeiraRep?.id ?? "");
+    setSelectedColaborador(primeiraRep?.colaboradores[0]?.id ?? "");
     setValorVenda("");
     setQuinzena("quinzena1");
     setDialogOpen(true);
@@ -104,6 +122,49 @@ function VendasPage() {
               </CardContent>
             </Card>
           ))}
+        </section>
+
+        <section className="grid gap-6">
+          <Card className="surface-card border-border/60">
+            <CardHeader className="flex items-center justify-between">
+              <CardTitle className="text-lg">Últimas vendas registradas</CardTitle>
+              <Badge variant="secondary">{dados.vendas.length}</Badge>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {dados.vendas.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Nenhuma venda registrada ainda.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {dados.vendas.slice(0, 8).map((venda) => {
+                    const rep = dados.representacoes.find((r) => r.id === venda.representationId);
+                    const colaborador = rep?.colaboradores.find((c) => c.id === venda.collaboratorId);
+
+                    return (
+                      <div
+                        key={venda.id}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 px-4 py-3"
+                      >
+                        <div>
+                          <p className="text-sm font-semibold">{rep?.nome ?? "Representação"}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {colaborador?.nome ?? "Colaborador"} · {venda.quinzena === "quinzena1" ? "1ª quinzena" : "2ª quinzena"}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-accent">{brl(venda.valor)}</p>
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            {new Date(venda.data).toLocaleDateString("pt-BR")}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </section>
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

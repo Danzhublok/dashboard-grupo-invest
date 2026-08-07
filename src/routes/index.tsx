@@ -5,19 +5,23 @@ import { useState } from "react";
 
 import logo from "@/assets/grupo-invest-logo.jpg?url";
 import { AppLayout } from "@/components/AppLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import {
   brl,
   cotasRep,
   lucroColaborador,
+  lucroColaboradorPorPeriodo,
   lucroMensal,
+  lucroRepresentacaoPorPeriodo,
   quinzena1Rep,
   quinzena2Rep,
   somaCotas,
-  somaLucro,
+  somaLucroPorPeriodo,
+  type DashboardPeriod,
 } from "@/lib/reps";
 
 export const Route = createFileRoute("/")({
@@ -80,8 +84,9 @@ function Dashboard() {
   const { dados } = useStore();
   const { session } = useAuth();
   const [mesSelecionado, setMesSelecionado] = useState(new Date().toISOString().slice(0, 7));
+  const [periodoSelecionado, setPeriodoSelecionado] = useState<DashboardPeriod>("geral");
   const representacoes = dados.representacoes;
-  const ganhoTotal = somaLucro(representacoes);
+  const ganhoTotal = somaLucroPorPeriodo(representacoes, periodoSelecionado);
   const saidasMes = dados.saidas.filter((saida) => saida.data.startsWith(mesSelecionado));
   const saidasAnterior = dados.saidas.filter((saida) =>
     saida.data.startsWith(mesAnterior(mesSelecionado)),
@@ -91,13 +96,18 @@ function Dashboard() {
   const lucroMes = ganhoTotal - totalSaidas;
   const cotasTotais = somaCotas(representacoes);
   const ticketMedio = cotasTotais ? Math.round(ganhoTotal / cotasTotais) : 0;
-  const ranking = [...representacoes].sort((a, b) => lucroMensal(b) - lucroMensal(a));
+  const ranking = [...representacoes].sort(
+    (a, b) => lucroRepresentacaoPorPeriodo(b, periodoSelecionado) - lucroRepresentacaoPorPeriodo(a, periodoSelecionado),
+  );
   const lider = ranking[0];
-  const pieData = representacoes.map((r) => ({ name: r.nome, value: lucroMensal(r) }));
+  const pieData = representacoes.map((r) => ({
+    name: r.nome,
+    value: lucroRepresentacaoPorPeriodo(r, periodoSelecionado),
+  }));
   const individualPieData = representacoes.flatMap((representation) =>
     representation.colaboradores.map((collaborator) => ({
       name: collaborator.nome,
-      value: lucroColaborador(collaborator),
+      value: lucroColaboradorPorPeriodo(collaborator, periodoSelecionado),
     })),
   );
   const vendedores = representacoes.flatMap((r) =>
@@ -106,6 +116,12 @@ function Dashboard() {
   const supervisores = representacoes.flatMap((r) =>
     r.colaboradores.filter((c) => c.cargo === "supervisor").map((c) => ({ ...c, logo: r.logo })),
   );
+
+  const periodoLabel: Record<DashboardPeriod, string> = {
+    geral: "Geral",
+    quinzena1: "1ª Quinzena",
+    quinzena2: "2ª Quinzena",
+  };
 
   return (
     <AppLayout title="Visão geral das representações">
@@ -134,6 +150,44 @@ function Dashboard() {
           </div>
         </section>
 
+        <section className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm font-semibold text-muted-foreground">Selecionar período</span>
+            <div className="inline-flex items-center gap-1 rounded-full border border-border/80 bg-card/90 p-1 shadow-sm">
+              <Button
+                variant={periodoSelecionado === "geral" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setPeriodoSelecionado("geral")}
+                className="rounded-full px-4"
+                aria-pressed={periodoSelecionado === "geral"}
+              >
+                Geral
+              </Button>
+              <Button
+                variant={periodoSelecionado === "quinzena1" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setPeriodoSelecionado("quinzena1")}
+                className="rounded-full px-4"
+                aria-pressed={periodoSelecionado === "quinzena1"}
+              >
+                1ª Quinzena
+              </Button>
+              <Button
+                variant={periodoSelecionado === "quinzena2" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setPeriodoSelecionado("quinzena2")}
+                className="rounded-full px-4"
+                aria-pressed={periodoSelecionado === "quinzena2"}
+              >
+                2ª Quinzena
+              </Button>
+            </div>
+          </div>
+          <div className="rounded-full border border-border/60 bg-background/50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            {periodoLabel[periodoSelecionado]}
+          </div>
+        </section>
+
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <KpiCard
             icon={Wallet}
@@ -157,13 +211,17 @@ function Dashboard() {
             icon={Users}
             label="Representação líder"
             value={lider ? lider.nome : "—"}
-            hint={lider ? `${brl(lucroMensal(lider))} no mês` : "Cadastre uma representação"}
+            hint={
+              lider
+                ? `${brl(lucroRepresentacaoPorPeriodo(lider, periodoSelecionado))} em ${periodoLabel[periodoSelecionado]}`
+                : "Cadastre uma representação"
+            }
           />
           <KpiCard
             icon={TrendingUp}
-            label="Ganho do mês"
+            label="Ganho do período"
             value={brl(ganhoTotal)}
-            hint="Vendas das representações"
+            hint={`${periodoLabel[periodoSelecionado]} · vendas das representações`}
           />
           <KpiCard
             icon={ArrowDownToLine}
@@ -265,14 +323,24 @@ function Dashboard() {
           <section className="grid gap-6 lg:grid-cols-2">
             <RankingCard
               title="Top 3 vendedores"
+              periodo={periodoSelecionado}
               entries={vendedores
-                .sort((a, b) => lucroColaborador(b) - lucroColaborador(a))
+                .sort(
+                  (a, b) =>
+                    lucroColaboradorPorPeriodo(b, periodoSelecionado) -
+                    lucroColaboradorPorPeriodo(a, periodoSelecionado),
+                )
                 .slice(0, 3)}
             />
             <RankingCard
               title="Top 3 supervisores"
+              periodo={periodoSelecionado}
               entries={supervisores
-                .sort((a, b) => lucroColaborador(b) - lucroColaborador(a))
+                .sort(
+                  (a, b) =>
+                    lucroColaboradorPorPeriodo(b, periodoSelecionado) -
+                    lucroColaboradorPorPeriodo(a, periodoSelecionado),
+                )
                 .slice(0, 3)}
             />
           </section>
@@ -337,8 +405,10 @@ function mesAnterior(mes: string) {
 function RankingCard({
   title,
   entries,
+  periodo,
 }: {
   title: string;
+  periodo: DashboardPeriod;
   entries: Array<{
     id: string;
     nome: string;
@@ -360,23 +430,30 @@ function RankingCard({
             Atribua cargos aos colaboradores para formar este ranking.
           </p>
         ) : (
-          entries.map((entry, index) => (
-            <div
-              key={`${entry.id}-${entry.logo}`}
-              className="flex items-center gap-3 rounded-xl border border-border/60 p-3"
-            >
-              <span className="w-6 font-semibold text-muted-foreground">{index + 1}º</span>
-              <img
-                src={entry.foto || entry.logo}
-                alt={`Foto de ${entry.nome}`}
-                className="size-10 rounded-full object-cover"
-              />
-              <span className="flex-1 font-medium">{entry.nome}</span>
-              <span className="font-semibold">
-                {brl(Number(entry.quinzena1 || 0) + Number(entry.quinzena2 || 0))}
-              </span>
-            </div>
-          ))
+          entries.map((entry, index) => {
+            const valorRanking =
+              periodo === "quinzena1"
+                ? Number(entry.quinzena1 || 0)
+                : periodo === "quinzena2"
+                  ? Number(entry.quinzena2 || 0)
+                  : Number(entry.quinzena1 || 0) + Number(entry.quinzena2 || 0);
+
+            return (
+              <div
+                key={`${entry.id}-${entry.logo}`}
+                className="flex items-center gap-3 rounded-xl border border-border/60 p-3"
+              >
+                <span className="w-6 font-semibold text-muted-foreground">{index + 1}º</span>
+                <img
+                  src={entry.foto || entry.logo}
+                  alt={`Foto de ${entry.nome}`}
+                  className="size-10 rounded-full object-cover"
+                />
+                <span className="flex-1 font-medium">{entry.nome}</span>
+                <span className="font-semibold">{brl(valorRanking)}</span>
+              </div>
+            );
+          })
         )}
       </CardContent>
     </Card>
