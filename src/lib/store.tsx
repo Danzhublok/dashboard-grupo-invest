@@ -490,8 +490,19 @@ export function StoreProvider({
       registrarVenda: ({ representationId, collaboratorId, valor, quinzena }) => {
         const month = new Date().toISOString().slice(0, 10);
 
+        const vendaId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
+        const sale: import("@/lib/reps").Venda = {
+          id: vendaId,
+          representationId,
+          collaboratorId,
+          valor,
+          quinzena,
+          data: new Date().toISOString(),
+        };
+
         setDados((current) => ({
           ...current,
+          vendas: [sale, ...current.vendas],
           representacoes: current.representacoes.map((rep) => {
             if (rep.id !== representationId) return rep;
 
