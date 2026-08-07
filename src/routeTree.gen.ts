@@ -15,6 +15,7 @@ import { Route as EquipesRouteImport } from './routes/equipes'
 import { Route as MetasRouteImport } from './routes/metas'
 import { Route as SaidasRouteImport } from './routes/saidas'
 import { Route as UsuariosRouteImport } from './routes/usuarios'
+import { Route as VendasRouteImport } from './routes/vendas'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -46,6 +47,11 @@ const UsuariosRoute = UsuariosRouteImport.update({
   path: '/usuarios',
   getParentRoute: () => rootRouteImport,
 } as any)
+const VendasRoute = VendasRouteImport.update({
+  id: '/vendas',
+  path: '/vendas',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -54,6 +60,7 @@ export interface FileRoutesByFullPath {
   '/metas': typeof MetasRoute
   '/saidas': typeof SaidasRoute
   '/usuarios': typeof UsuariosRoute
+  '/vendas': typeof VendasRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -62,6 +69,7 @@ export interface FileRoutesByTo {
   '/metas': typeof MetasRoute
   '/saidas': typeof SaidasRoute
   '/usuarios': typeof UsuariosRoute
+  '/vendas': typeof VendasRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -71,13 +79,27 @@ export interface FileRoutesById {
   '/metas': typeof MetasRoute
   '/saidas': typeof SaidasRoute
   '/usuarios': typeof UsuariosRoute
+  '/vendas': typeof VendasRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/configuracoes' | '/equipes' | '/metas' | '/saidas' | '/usuarios'
+    | '/'
+    | '/configuracoes'
+    | '/equipes'
+    | '/metas'
+    | '/saidas'
+    | '/usuarios'
+    | '/vendas'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/configuracoes' | '/equipes' | '/metas' | '/saidas' | '/usuarios'
+  to:
+    | '/'
+    | '/configuracoes'
+    | '/equipes'
+    | '/metas'
+    | '/saidas'
+    | '/usuarios'
+    | '/vendas'
   id:
     | '__root__'
     | '/'
@@ -86,6 +108,7 @@ export interface FileRouteTypes {
     | '/metas'
     | '/saidas'
     | '/usuarios'
+    | '/vendas'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -95,6 +118,7 @@ export interface RootRouteChildren {
   MetasRoute: typeof MetasRoute
   SaidasRoute: typeof SaidasRoute
   UsuariosRoute: typeof UsuariosRoute
+  VendasRoute: typeof VendasRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -141,6 +165,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UsuariosRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/vendas': {
+      id: '/vendas'
+      path: '/vendas'
+      fullPath: '/vendas'
+      preLoaderRoute: typeof VendasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -151,6 +182,7 @@ const rootRouteChildren: RootRouteChildren = {
   MetasRoute: MetasRoute,
   SaidasRoute: SaidasRoute,
   UsuariosRoute: UsuariosRoute,
+  VendasRoute: VendasRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

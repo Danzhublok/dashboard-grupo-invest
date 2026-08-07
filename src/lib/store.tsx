@@ -34,6 +34,12 @@ type Ctx = {
   removeColaborador: (repId: string, colId: string) => void;
   addSaida: (saida: Saida) => void;
   removeSaida: (id: string) => void;
+  registrarVenda: (input: {
+    representationId: string;
+    collaboratorId: string;
+    valor: number;
+    quinzena: "quinzena1" | "quinzena2";
+  }) => void;
   salvar: () => void;
   resetar: () => void;
   deleteUsuario: (userId: string) => Promise<boolean>;
@@ -480,6 +486,79 @@ export function StoreProvider({
       removeSaida: (id) => {
         setDados((d) => ({ ...d, saidas: d.saidas.filter((s) => s.id !== id) }));
         if (supabase) void report(supabase.from("expenses").delete().eq("id", id));
+      },
+      registrarVenda: ({ representationId, collaboratorId, valor, quinzena }) => {
+        const month = new Date().toISOString().slice(0, 10);
+
+        setDados((current) => ({
+          ...current,
+          representacoes: current.representacoes.map((rep) => {
+            if (rep.id !== representationId) return rep;
+
+            return {
+              ...rep,
+              colaboradores: rep.colaboradores.map((collaborator) => {
+                if (collaborator.id !== collaboratorId) return collaborator;
+
+                const proximoValor = Number(valor);
+                const atualQuinzena1 = Number(collaborator.quinzena1 || 0);
+                const atualQuinzena2 = Number(collaborator.quinzena2 || 0);
+                const atualCotas = Number(collaborator.cotas || 0);
+
+                return {
+                  ...collaborator,
+                  cotas: atualCotas + 1,
+                  quinzena1:
+                    quinzena === "quinzena1"
+                      ? atualQuinzena1 + proximoValor
+                      : atualQuinzena1,
+                  quinzena2:
+                    quinzena === "quinzena2"
+                      ? atualQuinzena2 + proximoValor
+                      : atualQuinzena2,
+                };
+              }),
+            };
+          }),
+        }));
+
+        if (supabase) {
+          const target = dadosVisiveis.representacoes
+            .flatMap((rep) => rep.colaboradores)
+            .find((c) => c.id === collaboratorId);
+
+          if (target) {
+            const updatedQuinzena1 =
+              quinzena === "quinzena1"
+                ? Number(target.quinzena1 || 0) + Number(valor)
+                : Number(target.quinzena1 || 0);
+            const updatedQuinzena2 =
+              quinzena === "quinzena2"
+                ? Number(target.quinzena2 || 0) + Number(valor)
+                : Number(target.quinzena2 || 0);
+            const updatedCotas = Number(target.cotas || 0) + 1;
+
+            void report(
+              supabase.from("collaborator_results").upsert(
+                {
+                  collaborator_id: collaboratorId,
+                  month,
+                  first_half: updatedQuinzena1,
+                  second_half: updatedQuinzena2,
+                  quotas: updatedCotas,
+                },
+                { onConflict: "collaborator_id,month" },
+              ),
+            );
+
+            void report(
+              supabase
+                .from("collaborators")
+                .update({ quotas: updatedCotas })
+                .eq("id", collaboratorId),
+            );
+          }
+        }
       },
       salvar: () => undefined,
       resetar: () => setDados(dadosIniciais),
