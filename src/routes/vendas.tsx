@@ -44,14 +44,20 @@ function VendasPage() {
   useEffect(() => {
     if (!selectedRep && dados.representacoes.length > 0) {
       const primeiraRep = dados.representacoes[0];
-      setSelectedRep(primeiraRep.id);
-      setSelectedColaborador(primeiraRep.colaboradores?.[0]?.id ?? "");
+      const primeiraCol = primeiraRep?.colaboradores?.[0]?.id ?? "";
+      setSelectedRep(primeiraRep?.id ?? "");
+      setSelectedColaborador(primeiraCol);
     }
   }, [dados.representacoes, selectedRep]);
 
   useEffect(() => {
     const repAtual = dados.representacoes.find((rep) => rep.id === selectedRep);
-    if (!repAtual || !Array.isArray(repAtual.colaboradores)) return;
+    if (!repAtual || !Array.isArray(repAtual.colaboradores) || repAtual.colaboradores.length === 0) {
+      if (selectedColaborador) {
+        setSelectedColaborador("");
+      }
+      return;
+    }
 
     if (!repAtual.colaboradores.some((colaborador) => colaborador.id === selectedColaborador)) {
       setSelectedColaborador(repAtual.colaboradores[0]?.id ?? "");
@@ -60,8 +66,9 @@ function VendasPage() {
 
   const onAbrirModal = () => {
     const primeiraRep = dados.representacoes[0];
+    const primeiraCol = primeiraRep?.colaboradores?.[0]?.id ?? "";
     setSelectedRep(primeiraRep?.id ?? "");
-    setSelectedColaborador(primeiraRep?.colaboradores[0]?.id ?? "");
+    setSelectedColaborador(primeiraCol);
     setValorVenda("");
     setQuinzena("quinzena1");
     setDialogOpen(true);
@@ -210,11 +217,15 @@ function VendasPage() {
                     setSelectedColaborador(nextRep?.colaboradores[0]?.id ?? "");
                   }}
                 >
-                  {dados.representacoes.map((rep) => (
-                    <option key={rep.id} value={rep.id}>
-                      {rep.nome}
-                    </option>
-                  ))}
+                  {dados.representacoes.length > 0 ? (
+                    dados.representacoes.map((rep) => (
+                      <option key={rep.id} value={rep.id}>
+                        {rep.nome}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">Sem representações</option>
+                  )}
                 </select>
               </div>
 
@@ -224,6 +235,7 @@ function VendasPage() {
                   className="h-10 rounded-md border border-input bg-background px-3 text-sm"
                   value={selectedColaborador}
                   onChange={(event) => setSelectedColaborador(event.target.value)}
+                  disabled={colaboradoresDaRep.length === 0}
                 >
                   {colaboradoresDaRep.length === 0 && <option value="">Sem colaboradores</option>}
                   {colaboradoresDaRep.map((c) => (
