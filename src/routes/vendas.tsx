@@ -29,10 +29,15 @@ function VendasPage() {
   const [valorVenda, setValorVenda] = useState<string>("");
   const [quinzena, setQuinzena] = useState<"quinzena1" | "quinzena2">("quinzena1");
 
-  const repSelecionada = useMemo(
-    () => dados.representacoes.find((rep) => rep.id === selectedRep) ?? dados.representacoes[0],
-    [dados.representacoes, selectedRep],
-  );
+  const repSelecionada = useMemo(() => {
+    if (dados.representacoes.length === 0) return undefined;
+
+    if (selectedRep) {
+      return dados.representacoes.find((rep) => rep.id === selectedRep) ?? dados.representacoes[0];
+    }
+
+    return dados.representacoes[0];
+  }, [dados.representacoes, selectedRep]);
 
   const colaboradoresDaRep = repSelecionada?.colaboradores ?? [];
 
@@ -40,13 +45,13 @@ function VendasPage() {
     if (!selectedRep && dados.representacoes.length > 0) {
       const primeiraRep = dados.representacoes[0];
       setSelectedRep(primeiraRep.id);
-      setSelectedColaborador(primeiraRep.colaboradores[0]?.id ?? "");
+      setSelectedColaborador(primeiraRep.colaboradores?.[0]?.id ?? "");
     }
   }, [dados.representacoes, selectedRep]);
 
   useEffect(() => {
     const repAtual = dados.representacoes.find((rep) => rep.id === selectedRep);
-    if (!repAtual) return;
+    if (!repAtual || !Array.isArray(repAtual.colaboradores)) return;
 
     if (!repAtual.colaboradores.some((colaborador) => colaborador.id === selectedColaborador)) {
       setSelectedColaborador(repAtual.colaboradores[0]?.id ?? "");
@@ -94,34 +99,46 @@ function VendasPage() {
         </section>
 
         <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {dados.representacoes.map((rep) => (
-            <Card key={rep.id} className="surface-card border-border/60">
-              <CardHeader className="flex flex-row items-center gap-3 border-b border-border/60 pb-4">
-                <img src={rep.logo} alt="" className="size-10 object-contain" />
-                <div className="flex-1">
-                  <CardTitle className="text-base">{rep.nome}</CardTitle>
-                  <p className="text-xs text-muted-foreground">{rep.representante}</p>
-                </div>
-                <Badge variant="secondary">{rep.colaboradores.length}</Badge>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">1ª quinzena</span>
-                    <strong>{brl(quinzena1Rep(rep))}</strong>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">2ª quinzena</span>
-                    <strong>{brl(quinzena2Rep(rep))}</strong>
-                  </div>
-                  <div className="flex items-center justify-between border-t border-border/50 pt-2">
-                    <span className="font-semibold">Lucro</span>
-                    <strong className="text-accent">{brl(rep.colaboradores.reduce((sum, c) => sum + lucroColaborador(c), 0))}</strong>
-                  </div>
-                </div>
+          {dados.representacoes.length === 0 ? (
+            <Card className="surface-card border-border/60 md:col-span-2 xl:col-span-3">
+              <CardContent className="pt-6">
+                <p className="text-sm text-muted-foreground">
+                  Ainda não há representações carregadas para registrar vendas.
+                </p>
               </CardContent>
             </Card>
-          ))}
+          ) : (
+            dados.representacoes.map((rep) => (
+              <Card key={rep.id} className="surface-card border-border/60">
+                <CardHeader className="flex flex-row items-center gap-3 border-b border-border/60 pb-4">
+                  <img src={rep.logo} alt="" className="size-10 object-contain" />
+                  <div className="flex-1">
+                    <CardTitle className="text-base">{rep.nome}</CardTitle>
+                    <p className="text-xs text-muted-foreground">{rep.representante}</p>
+                  </div>
+                  <Badge variant="secondary">{rep.colaboradores?.length ?? 0}</Badge>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">1ª quinzena</span>
+                      <strong>{brl(quinzena1Rep(rep))}</strong>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">2ª quinzena</span>
+                      <strong>{brl(quinzena2Rep(rep))}</strong>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-border/50 pt-2">
+                      <span className="font-semibold">Lucro</span>
+                      <strong className="text-accent">
+                        {brl((rep.colaboradores ?? []).reduce((sum, c) => sum + lucroColaborador(c), 0))}
+                      </strong>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
         </section>
 
         <section className="grid gap-6">
@@ -139,7 +156,11 @@ function VendasPage() {
                 <div className="space-y-2">
                   {dados.vendas.slice(0, 8).map((venda) => {
                     const rep = dados.representacoes.find((r) => r.id === venda.representationId);
-                    const colaborador = rep?.colaboradores.find((c) => c.id === venda.collaboratorId);
+                    const colaborador = rep?.colaboradores?.find((c) => c.id === venda.collaboratorId);
+                    const dataValida = venda?.data ? new Date(venda.data) : undefined;
+                    const dataTexto = dataValida && !Number.isNaN(dataValida.getTime())
+                      ? dataValida.toLocaleDateString("pt-BR")
+                      : "Data indisponível";
 
                     return (
                       <div
@@ -153,9 +174,9 @@ function VendasPage() {
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="text-sm font-bold text-accent">{brl(venda.valor)}</p>
+                          <p className="text-sm font-bold text-accent">{brl(Number(venda.valor ?? 0))}</p>
                           <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                            {new Date(venda.data).toLocaleDateString("pt-BR")}
+                            {dataTexto}
                           </p>
                         </div>
                       </div>
