@@ -112,15 +112,15 @@ function RepEditor({ rep, isAdmin }: { rep: Representacao; isAdmin: boolean }) {
 
   return (
     <Card className="surface-card border-border/60">
-      <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border/60 pb-4">
-        <div className="flex items-center gap-3">
-          <img src={rep.logo} alt={`Logo ${rep.nome}`} className="size-10 object-contain" />
-          <div>
-            <CardTitle className="text-lg">{rep.nome}</CardTitle>
+      <CardHeader className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <img src={rep.logo} alt={`Logo ${rep.nome}`} className="size-10 shrink-0 object-contain" />
+          <div className="min-w-0">
+            <CardTitle className="truncate text-lg">{rep.nome}</CardTitle>
             <p className="text-xs text-muted-foreground">{brl(lucroMensal(rep))} no mês</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {isAdmin && (
             <Button
               size="sm"
@@ -145,7 +145,7 @@ function RepEditor({ rep, isAdmin }: { rep: Representacao; isAdmin: boolean }) {
         </div>
       </CardHeader>
       <CardContent className="space-y-5 pt-5">
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor={`nome-${rep.id}`}>Nome da representação</Label>
             <Input
@@ -175,7 +175,7 @@ function RepEditor({ rep, isAdmin }: { rep: Representacao; isAdmin: boolean }) {
 
         <div className="space-y-3">
           <p className="text-sm font-semibold">Colaboradores</p>
-          <div className="hidden gap-2 px-1 text-xs text-muted-foreground md:grid md:grid-cols-[1.4fr_1.4fr_0.8fr_0.5fr_1fr_1fr_auto]">
+          <div className="hidden gap-2 px-1 text-xs text-muted-foreground lg:grid lg:grid-cols-[1.4fr_1.4fr_0.8fr_0.5fr_1fr_1fr_auto]">
             <span>Nome</span>
             <span>Foto</span>
             <span>Cargo</span>
@@ -187,7 +187,7 @@ function RepEditor({ rep, isAdmin }: { rep: Representacao; isAdmin: boolean }) {
           {rep.colaboradores.map((c) => (
             <div
               key={c.id}
-              className="grid gap-2 rounded-xl border border-border/60 p-2 md:grid-cols-[1.4fr_1.4fr_0.8fr_0.5fr_1fr_1fr_auto] md:border-0 md:p-0"
+              className="grid gap-2 rounded-xl border border-border/60 p-2 sm:grid-cols-2 lg:grid-cols-[1.4fr_1.4fr_0.8fr_0.5fr_1fr_1fr_auto] lg:border-0 lg:p-0"
             >
               <Input
                 value={c.nome}

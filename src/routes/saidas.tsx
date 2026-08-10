@@ -43,7 +43,7 @@ function Saidas() {
           <CardHeader>
             <CardTitle>Nova saída</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-[1fr_180px_160px_auto] md:items-end">
+          <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_180px_160px_auto] lg:items-end">
             <div className="space-y-2">
               <Label htmlFor="motivo">Motivo</Label>
               <Input
@@ -72,9 +72,15 @@ function Saidas() {
                 onChange={(e) => setData(e.target.value)}
               />
             </div>
-            <Button onClick={adicionar} disabled={!motivo.trim() || valor === "" || valor <= 0}>
-              <Plus className="size-4" /> Adicionar
-            </Button>
+            <div className="sm:col-span-2 lg:col-span-1">
+              <Button
+                onClick={adicionar}
+                disabled={!motivo.trim() || valor === "" || valor <= 0}
+                className="w-full lg:w-auto"
+              >
+                <Plus className="size-4" /> Adicionar
+              </Button>
+            </div>
           </CardContent>
         </Card>
 

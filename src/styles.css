@@ -141,13 +141,30 @@
 
 @layer base {
   * {
+    box-sizing: border-box;
     border-color: var(--color-border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-body);
+    min-width: 320px;
+    overflow-x: hidden;
+  }
+
+  #root {
+    min-width: 100%;
+  }
+
+  img,
+  svg {
+    display: block;
+    max-width: 100%;
   }
 
   h1, h2, h3, h4 {
