@@ -179,7 +179,8 @@ export function StoreProvider({
         (representation) =>
           representation.id === representationId || representation.name === representationName,
       );
-      setDados({
+      setDados((atual) => ({
+        vendas: atual.vendas ?? [],
         metaMensal: Number(companyTargets?.[0]?.amount ?? 0),
         metasEquipe,
         metasColaborador,
@@ -209,7 +210,7 @@ export function StoreProvider({
               };
             }),
         })),
-      });
+      }));
       setPronto(true);
     };
     void load();
