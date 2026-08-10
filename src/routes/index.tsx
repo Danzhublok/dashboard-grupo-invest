@@ -143,8 +143,7 @@ function Dashboard() {
                GRUPO INVEST | PAINEL EXECUTIVO DE PERFORMANCE
               </h1>
               <p className="mt-2 max-w-2xl text-sm opacity-85 md:text-base">
-                Consultoria de crédito imobiliário · lucro mensal e quinzenal por representação e
-                colaborador.
+                Produção • Receita • Rentabilidade • Representações • Performance Individual
               </p>
             </div>
           </div>
