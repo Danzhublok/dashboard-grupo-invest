@@ -140,7 +140,7 @@ function Dashboard() {
                 Investimentos &amp; Consórcios
               </p>
               <h1 className="mt-2 text-3xl font-bold md:text-4xl">
-                Painel de Resultados — Grupo Invest
+               GRUPO INVEST | PAINEL EXECUTIVO DE PERFORMANCE
               </h1>
               <p className="mt-2 max-w-2xl text-sm opacity-85 md:text-base">
                 Consultoria de crédito imobiliário · lucro mensal e quinzenal por representação e
