@@ -98,7 +98,7 @@ export function StoreProvider({
           .select("id, representation_id, full_name, role, avatar_url, quotas"),
         supabase
           .from("collaborator_results")
-          .select("collaborator_id, first_half, second_half")
+          .select("collaborator_id, month, first_half, second_half")
           .gte("month", mesAtual)
           .lt("month", proximoMes),
         supabase.from("expenses").select("id, representation_id, reason, amount, occurred_on"),
@@ -155,7 +155,21 @@ export function StoreProvider({
 
       if (!active) return;
       const resultsByCollaborator = new Map<string, { first: number; second: number }>();
+      const collaboratorsWithCanonicalResult = new Set<string>();
       (results ?? []).forEach((result) => {
+        // New writes use the first day as the canonical monthly record. When
+        // legacy daily rows also exist, the canonical row is the final value
+        // and must not be added to them.
+        if (result.month === mesAtual) {
+          resultsByCollaborator.set(result.collaborator_id, {
+            first: Number(result.first_half ?? 0),
+            second: Number(result.second_half ?? 0),
+          });
+          collaboratorsWithCanonicalResult.add(result.collaborator_id);
+          return;
+        }
+
+        if (collaboratorsWithCanonicalResult.has(result.collaborator_id)) return;
         const previous = resultsByCollaborator.get(result.collaborator_id) ?? {
           first: 0,
           second: 0,
