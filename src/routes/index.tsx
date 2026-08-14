@@ -1,5 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { ArrowDownToLine, Ban, CalendarDays, Coins, TrendingUp, Users, Wallet } from "lucide-react";
 import { useState } from "react";
 
@@ -113,6 +125,23 @@ function Dashboard() {
         .reduce((total, venda) => total + Number(venda.valor || 0), 0),
     }))
     .filter((representacao) => representacao.value > 0);
+  const vendasPorDia = Object.values(
+    dados.vendas
+      .filter(
+        (venda) =>
+          venda.status === "ativa" &&
+          (periodoSelecionado === "geral" || venda.quinzena === periodoSelecionado),
+      )
+      .reduce<Record<string, { data: string; valor: number }>>((dias, venda) => {
+        const data = venda.data.slice(0, 10);
+        const atual = dias[data] ?? { data, valor: 0 };
+        atual.valor += Number(venda.valor || 0);
+        dias[data] = atual;
+        return dias;
+      }, {}),
+  )
+    .sort((a, b) => a.data.localeCompare(b.data))
+    .map((dia) => ({ ...dia, label: new Date(`${dia.data}T12:00:00`).toLocaleDateString("pt-BR") }));
   const ranking = [...representacoes].sort(
     (a, b) => lucroRepresentacaoPorPeriodo(b, periodoSelecionado) - lucroRepresentacaoPorPeriodo(a, periodoSelecionado),
   );
@@ -370,6 +399,33 @@ function Dashboard() {
                     <Tooltip formatter={(value: number) => brl(value)} />
                     <Legend />
                   </PieChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+          <Card className="surface-card border-border/60">
+            <CardHeader>
+              <CardTitle>Vendas por dia</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[340px]">
+              {vendasPorDia.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-center text-sm text-muted-foreground">
+                  Nenhuma venda ativa no período selecionado.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={vendasPorDia} margin={{ top: 12, right: 8, left: 8, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      fontSize={12}
+                      tickFormatter={(value: number) => brl(value)}
+                    />
+                    <Tooltip formatter={(value: number) => brl(value)} labelFormatter={(label) => `Dia ${label}`} />
+                    <Bar dataKey="valor" name="Vendas" fill="var(--chart-2)" radius={[6, 6, 0, 0]} />
+                  </BarChart>
                 </ResponsiveContainer>
               )}
             </CardContent>
