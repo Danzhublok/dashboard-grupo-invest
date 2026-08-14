@@ -175,13 +175,16 @@ function VendasPage() {
                         className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 px-4 py-3"
                       >
                         <div>
-                          <p className="text-sm font-semibold">{rep?.nome ?? "Representação"}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold">{rep?.nome ?? "Representação"}</p>
+                            {venda.status === "cancelada" && <Badge variant="destructive">Cancelada</Badge>}
+                          </div>
                           <p className="text-xs text-muted-foreground">
                             {colaborador?.nome ?? "Colaborador"} · {venda.quinzena === "quinzena1" ? "1ª quinzena" : "2ª quinzena"}
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="text-sm font-bold text-accent">{brl(Number(venda.valor ?? 0))}</p>
+                          <p className={venda.status === "cancelada" ? "text-sm font-bold text-muted-foreground line-through" : "text-sm font-bold text-accent"}>{brl(Number(venda.valor ?? 0))}</p>
                           <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
                             {dataTexto}
                           </p>

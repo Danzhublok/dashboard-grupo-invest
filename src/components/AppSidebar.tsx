@@ -1,6 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   ArrowDownToLine,
+  Ban,
   CircleDollarSign,
   LayoutDashboard,
   LogOut,
@@ -29,6 +30,7 @@ const adminItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Equipes", url: "/equipes", icon: Users },
   { title: "Vendas", url: "/vendas", icon: CircleDollarSign },
+  { title: "Cancelamentos", url: "/cancelamentos", icon: Ban },
   { title: "Metas", url: "/metas", icon: Target },
   { title: "Saídas", url: "/saidas", icon: ArrowDownToLine },
   { title: "Usuários", url: "/usuarios", icon: UserRoundCog },
@@ -39,6 +41,7 @@ const representativeItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Equipes", url: "/equipes", icon: Users },
   { title: "Vendas", url: "/vendas", icon: CircleDollarSign },
+  { title: "Cancelamentos", url: "/cancelamentos", icon: Ban },
   { title: "Metas", url: "/metas", icon: Target },
   { title: "Configurações", url: "/configuracoes", icon: Settings },
 ];

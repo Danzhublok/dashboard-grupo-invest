@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CancelamentosRouteImport } from './routes/cancelamentos'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
 import { Route as EquipesRouteImport } from './routes/equipes'
 import { Route as MetasRouteImport } from './routes/metas'
@@ -20,6 +21,11 @@ import { Route as VendasRouteImport } from './routes/vendas'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CancelamentosRoute = CancelamentosRouteImport.update({
+  id: '/cancelamentos',
+  path: '/cancelamentos',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
@@ -55,6 +61,7 @@ const VendasRoute = VendasRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/cancelamentos': typeof CancelamentosRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/equipes': typeof EquipesRoute
   '/metas': typeof MetasRoute
@@ -64,6 +71,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/cancelamentos': typeof CancelamentosRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/equipes': typeof EquipesRoute
   '/metas': typeof MetasRoute
@@ -74,6 +82,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/cancelamentos': typeof CancelamentosRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/equipes': typeof EquipesRoute
   '/metas': typeof MetasRoute
@@ -85,6 +94,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/cancelamentos'
     | '/configuracoes'
     | '/equipes'
     | '/metas'
@@ -94,6 +104,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/cancelamentos'
     | '/configuracoes'
     | '/equipes'
     | '/metas'
@@ -103,6 +114,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/cancelamentos'
     | '/configuracoes'
     | '/equipes'
     | '/metas'
@@ -113,6 +125,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CancelamentosRoute: typeof CancelamentosRoute
   ConfiguracoesRoute: typeof ConfiguracoesRoute
   EquipesRoute: typeof EquipesRoute
   MetasRoute: typeof MetasRoute
@@ -128,6 +141,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cancelamentos': {
+      id: '/cancelamentos'
+      path: '/cancelamentos'
+      fullPath: '/cancelamentos'
+      preLoaderRoute: typeof CancelamentosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/configuracoes': {
@@ -177,6 +197,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CancelamentosRoute: CancelamentosRoute,
   ConfiguracoesRoute: ConfiguracoesRoute,
   EquipesRoute: EquipesRoute,
   MetasRoute: MetasRoute,

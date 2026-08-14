@@ -40,6 +40,7 @@ type Ctx = {
     valor: number;
     quinzena: "quinzena1" | "quinzena2";
   }) => void;
+  cancelarVenda: (saleId: string, motivo: string) => void;
   salvar: () => void;
   resetar: () => void;
   deleteUsuario: (userId: string) => Promise<boolean>;
@@ -116,6 +117,10 @@ export function StoreProvider({
           .gte("month", mesAtual)
           .lt("month", proximoMes)
           .limit(1),
+        supabase
+          .from("sales")
+          .select("id, representation_id, collaborator_id, amount, half, sold_at, status, cancellation_reason, cancelled_at")
+          .order("sold_at", { ascending: false }),
       ]);
 
       const failed = responses.find((response) => response.error);
@@ -137,6 +142,7 @@ export function StoreProvider({
         { data: memberships },
         { data: collaboratorTargets },
         { data: companyTargets },
+        { data: sales },
       ] = responses;
 
       if (!active) return;
@@ -183,6 +189,17 @@ export function StoreProvider({
         metaMensal: Number(companyTargets?.[0]?.amount ?? 0),
         metasEquipe,
         metasColaborador,
+        vendas: (sales ?? []).map((sale) => ({
+          id: sale.id,
+          representationId: sale.representation_id,
+          collaboratorId: sale.collaborator_id,
+          valor: Number(sale.amount),
+          quinzena: sale.half as "quinzena1" | "quinzena2",
+          data: sale.sold_at,
+          status: sale.status as "ativa" | "cancelada",
+          motivoCancelamento: sale.cancellation_reason ?? undefined,
+          canceladaEm: sale.cancelled_at ?? undefined,
+        })),
         saidas: (expenses ?? []).map((expense) => ({
           id: expense.id,
           motivo: expense.reason,
@@ -498,6 +515,7 @@ export function StoreProvider({
           valor,
           quinzena,
           data: new Date().toISOString(),
+          status: "ativa",
         };
 
         setDados((current) => ({
@@ -550,6 +568,18 @@ export function StoreProvider({
             const updatedCotas = Number(target.cotas || 0) + 1;
 
             void report(
+              supabase.from("sales").insert({
+                id: vendaId,
+                representation_id: representationId,
+                collaborator_id: collaboratorId,
+                amount: valor,
+                half: quinzena,
+                sold_at: sale.data,
+                created_by: session?.userId ?? null,
+              }),
+            );
+
+            void report(
               supabase.from("collaborator_results").upsert(
                 {
                   collaborator_id: collaboratorId,
@@ -569,6 +599,56 @@ export function StoreProvider({
                 .eq("id", collaboratorId),
             );
           }
+        }
+      },
+      cancelarVenda: (saleId, motivo) => {
+        const venda = dados.vendas.find((item) => item.id === saleId);
+        if (!venda || venda.status === "cancelada") return;
+
+        const motivoLimpo = motivo.trim();
+        const canceladaEm = new Date().toISOString();
+        const mesDaVenda = venda.data.slice(0, 10);
+        const mesAtual = new Date().toISOString().slice(0, 7);
+        const vendaNoMesAtual = mesDaVenda.slice(0, 7) === mesAtual;
+
+        setDados((current) => ({
+          ...current,
+          vendas: current.vendas.map((item) =>
+            item.id === saleId
+              ? { ...item, status: "cancelada", motivoCancelamento: motivoLimpo, canceladaEm }
+              : item,
+          ),
+          representacoes: vendaNoMesAtual
+            ? current.representacoes.map((rep) =>
+                rep.id !== venda.representationId
+                  ? rep
+                  : {
+                      ...rep,
+                      colaboradores: rep.colaboradores.map((collaborator) =>
+                        collaborator.id !== venda.collaboratorId
+                          ? collaborator
+                          : {
+                              ...collaborator,
+                              cotas: Math.max(0, Number(collaborator.cotas || 0) - 1),
+                              quinzena1:
+                                venda.quinzena === "quinzena1"
+                                  ? Math.max(0, Number(collaborator.quinzena1 || 0) - venda.valor)
+                                  : collaborator.quinzena1,
+                              quinzena2:
+                                venda.quinzena === "quinzena2"
+                                  ? Math.max(0, Number(collaborator.quinzena2 || 0) - venda.valor)
+                                  : collaborator.quinzena2,
+                            },
+                      ),
+                    },
+              )
+            : current.representacoes,
+        }));
+
+        if (supabase) {
+          void report(
+            supabase.rpc("cancel_sale", { sale_id: saleId, reason: motivoLimpo }),
+          );
         }
       },
       salvar: () => undefined,

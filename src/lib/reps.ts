@@ -22,6 +22,9 @@ export type Venda = {
   valor: number;
   quinzena: "quinzena1" | "quinzena2";
   data: string;
+  status: "ativa" | "cancelada";
+  motivoCancelamento?: string;
+  canceladaEm?: string;
 };
 
 export type Representacao = {
