@@ -152,16 +152,16 @@ function VendasPage() {
           <Card className="surface-card border-border/60">
             <CardHeader className="flex items-center justify-between">
               <CardTitle className="text-lg">Últimas vendas registradas</CardTitle>
-              <Badge variant="secondary">{dados.vendas.length}</Badge>
+              <Badge variant="secondary">{(dados.vendas ?? []).length}</Badge>
             </CardHeader>
             <CardContent className="space-y-3">
-              {dados.vendas.length === 0 ? (
+              {(dados.vendas ?? []).length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   Nenhuma venda registrada ainda.
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {dados.vendas.slice(0, 8).map((venda) => {
+                  {(dados.vendas ?? []).slice(0, 8).map((venda) => {
                     const rep = dados.representacoes.find((r) => r.id === venda.representationId);
                     const colaborador = rep?.colaboradores?.find((c) => c.id === venda.collaboratorId);
                     const dataValida = venda?.data ? new Date(venda.data) : undefined;
@@ -217,7 +217,7 @@ function VendasPage() {
                     const nextValue = event.target.value;
                     setSelectedRep(nextValue);
                     const nextRep = dados.representacoes.find((r) => r.id === nextValue);
-                    setSelectedColaborador(nextRep?.colaboradores[0]?.id ?? "");
+                    setSelectedColaborador(nextRep?.colaboradores?.[0]?.id ?? "");
                   }}
                 >
                   {dados.representacoes.length > 0 ? (
