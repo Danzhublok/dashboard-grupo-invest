@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
-import { ArrowDownToLine, CalendarDays, Coins, TrendingUp, Users, Wallet } from "lucide-react";
+import { ArrowDownToLine, Ban, CalendarDays, Coins, TrendingUp, Users, Wallet } from "lucide-react";
 import { useState } from "react";
 
 import logo from "@/assets/grupo-invest-logo.jpg?url";
@@ -96,6 +96,15 @@ function Dashboard() {
   const lucroMes = ganhoTotal - totalSaidas;
   const cotasTotais = somaCotas(representacoes);
   const ticketMedio = cotasTotais ? Math.round(ganhoTotal / cotasTotais) : 0;
+  const vendasCanceladas = dados.vendas.filter(
+    (venda) =>
+      venda.status === "cancelada" &&
+      (periodoSelecionado === "geral" || venda.quinzena === periodoSelecionado),
+  );
+  const valorCancelado = vendasCanceladas.reduce(
+    (total, venda) => total + Number(venda.valor || 0),
+    0,
+  );
   const ranking = [...representacoes].sort(
     (a, b) => lucroRepresentacaoPorPeriodo(b, periodoSelecionado) - lucroRepresentacaoPorPeriodo(a, periodoSelecionado),
   );
@@ -227,6 +236,12 @@ function Dashboard() {
             label="Saídas"
             value={brl(totalSaidas)}
             hint="Custos registrados no período"
+          />
+          <KpiCard
+            icon={Ban}
+            label="Vendas canceladas"
+            value={String(vendasCanceladas.length)}
+            hint={`${brl(valorCancelado)} cancelados em ${periodoLabel[periodoSelecionado]}`}
           />
         </section>
 
