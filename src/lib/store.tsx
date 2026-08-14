@@ -41,7 +41,7 @@ type Ctx = {
     quinzena: "quinzena1" | "quinzena2";
   }) => void;
   cancelarVenda: (saleId: string, motivo: string) => void;
-  salvar: () => void;
+  salvar: () => Promise<boolean>;
   resetar: () => void;
   deleteUsuario: (userId: string) => Promise<boolean>;
   alterarSenhaUsuario: (userId: string, password: string) => Promise<boolean>;
@@ -652,7 +652,40 @@ export function StoreProvider({
           );
         }
       },
-      salvar: () => undefined,
+      salvar: async () => {
+        if (!supabase) return true;
+
+        const operations = dadosVisiveis.representacoes.flatMap((representation) => [
+          supabase
+            .from("representations")
+            .update({
+              name: representation.nome,
+              logo_url: representation.logo,
+              representative_name: representation.representante,
+            })
+            .eq("id", representation.id),
+          ...representation.colaboradores.map((collaborator) =>
+            supabase
+              .from("collaborators")
+              .update({
+                full_name: collaborator.nome,
+                role: collaborator.cargo,
+                avatar_url: collaborator.foto,
+                quotas: Number(collaborator.cotas || 0),
+              })
+              .eq("id", collaborator.id),
+          ),
+        ]);
+        const results = await Promise.all(operations);
+        const failed = results.find((result) => result.error);
+        if (failed?.error) {
+          setErro(failed.error.message);
+          return false;
+        }
+
+        setErro(null);
+        return true;
+      },
       resetar: () => setDados(dadosIniciais),
     };
   }, [dados, dadosVisiveis, erro, pronto, session?.userId, usuarios]);

@@ -124,9 +124,9 @@ function RepEditor({ rep, isAdmin }: { rep: Representacao; isAdmin: boolean }) {
           {isAdmin && (
             <Button
               size="sm"
-              onClick={() => {
-                salvar();
-                setSalvo(true);
+              onClick={async () => {
+                setSalvo(false);
+                setSalvo(await salvar());
               }}
             >
               <Check className="size-4" /> {salvo ? "Salvo" : "Salvar"}
