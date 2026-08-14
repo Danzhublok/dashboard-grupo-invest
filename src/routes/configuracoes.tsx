@@ -114,7 +114,11 @@ function RepEditor({ rep, isAdmin }: { rep: Representacao; isAdmin: boolean }) {
     <Card className="surface-card border-border/60">
       <CardHeader className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-4">
         <div className="flex min-w-0 items-center gap-3">
-          <img src={rep.logo} alt={`Logo ${rep.nome}`} className="size-10 shrink-0 object-contain" />
+          <img
+            src={rep.logo}
+            alt={`Logo ${rep.nome}`}
+            className="size-10 shrink-0 object-contain"
+          />
           <div className="min-w-0">
             <CardTitle className="truncate text-lg">{rep.nome}</CardTitle>
             <p className="text-xs text-muted-foreground">{brl(lucroMensal(rep))} no mês</p>
@@ -283,13 +287,15 @@ function RepEditor({ rep, isAdmin }: { rep: Representacao; isAdmin: boolean }) {
 }
 
 function Configuracoes() {
-  const { dados, setMeta, addRepresentacao, resetar } = useStore();
+  const { dados, setMeta, addRepresentacao, resetar, salvar } = useStore();
   const { session } = useAuth();
   const isAdmin = session?.role === "admin";
   const [nome, setNome] = useState("");
   const [representante, setRepresentante] = useState("");
   const [logo, setLogo] = useState("");
   const [criando, setCriando] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [salvo, setSalvo] = useState(false);
 
   const lucroTotal = somaLucro(dados.representacoes);
 
@@ -303,9 +309,26 @@ function Configuracoes() {
               Metas, representações, logos e colaboradores. As alterações são salvas no Supabase.
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={resetar}>
-            <RotateCcw className="size-4" /> Restaurar padrão
-          </Button>
+          <div className="flex gap-2">
+            {isAdmin && (
+              <Button
+                size="sm"
+                disabled={salvando}
+                onClick={async () => {
+                  setSalvando(true);
+                  setSalvo(false);
+                  setSalvo(await salvar());
+                  setSalvando(false);
+                }}
+              >
+                <Check className="size-4" />
+                {salvando ? "Salvando..." : salvo ? "Alterações salvas" : "Salvar alterações"}
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={resetar}>
+              <RotateCcw className="size-4" /> Restaurar padrão
+            </Button>
+          </div>
         </div>
 
         {isAdmin && (

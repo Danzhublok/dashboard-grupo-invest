@@ -54,6 +54,12 @@ export type RepresentativeCredentials = {
 
 const StoreContext = createContext<Ctx | null>(null);
 
+// Monthly records always share one key, regardless of the day they are edited.
+const currentMonth = () => {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
+};
+
 export function StoreProvider({
   children,
   representationId,
@@ -119,7 +125,9 @@ export function StoreProvider({
           .limit(1),
         supabase
           .from("sales")
-          .select("id, representation_id, collaborator_id, amount, half, sold_at, status, cancellation_reason, cancelled_at")
+          .select(
+            "id, representation_id, collaborator_id, amount, half, sold_at, status, cancellation_reason, cancelled_at",
+          )
           .order("sold_at", { ascending: false }),
       ]);
 
@@ -268,7 +276,7 @@ export function StoreProvider({
           void report(
             supabase.from("company_targets").upsert(
               {
-                month: new Date().toISOString().slice(0, 10),
+                month: currentMonth(),
                 amount: v,
               },
               { onConflict: "month" },
@@ -286,7 +294,7 @@ export function StoreProvider({
             supabase.from("targets").upsert(
               {
                 representation_id: representationId,
-                month: new Date().toISOString().slice(0, 10),
+                month: currentMonth(),
                 amount: value,
               },
               { onConflict: "representation_id,month" },
@@ -303,7 +311,7 @@ export function StoreProvider({
             supabase.from("collaborator_targets").upsert(
               {
                 collaborator_id: collaboratorId,
-                month: new Date().toISOString().slice(0, 10),
+                month: currentMonth(),
                 amount: value,
               },
               { onConflict: "collaborator_id,month" },
@@ -468,7 +476,7 @@ export function StoreProvider({
               supabase.from("collaborator_results").upsert(
                 {
                   collaborator_id: colId,
-                  month: new Date().toISOString().slice(0, 10),
+                  month: currentMonth(),
                   first_half: Number(next.quinzena1 || 0),
                   second_half: Number(next.quinzena2 || 0),
                   quotas: Number(next.cotas || 0),
@@ -506,7 +514,7 @@ export function StoreProvider({
         if (supabase) void report(supabase.from("expenses").delete().eq("id", id));
       },
       registrarVenda: ({ representationId, collaboratorId, valor, quinzena }) => {
-        const month = new Date().toISOString().slice(0, 10);
+        const month = currentMonth();
 
         const vendaId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
         const sale: import("@/lib/reps").Venda = {
@@ -539,13 +547,9 @@ export function StoreProvider({
                   ...collaborator,
                   cotas: atualCotas + 1,
                   quinzena1:
-                    quinzena === "quinzena1"
-                      ? atualQuinzena1 + proximoValor
-                      : atualQuinzena1,
+                    quinzena === "quinzena1" ? atualQuinzena1 + proximoValor : atualQuinzena1,
                   quinzena2:
-                    quinzena === "quinzena2"
-                      ? atualQuinzena2 + proximoValor
-                      : atualQuinzena2,
+                    quinzena === "quinzena2" ? atualQuinzena2 + proximoValor : atualQuinzena2,
                 };
               }),
             };
@@ -647,35 +651,70 @@ export function StoreProvider({
         }));
 
         if (supabase) {
-          void report(
-            supabase.rpc("cancel_sale", { sale_id: saleId, reason: motivoLimpo }),
-          );
+          void report(supabase.rpc("cancel_sale", { sale_id: saleId, reason: motivoLimpo }));
         }
       },
       salvar: async () => {
         if (!supabase) return true;
 
-        const operations = dadosVisiveis.representacoes.flatMap((representation) => [
+        const month = currentMonth();
+        const operations = [
           supabase
-            .from("representations")
-            .update({
-              name: representation.nome,
-              logo_url: representation.logo,
-              representative_name: representation.representante,
-            })
-            .eq("id", representation.id),
-          ...representation.colaboradores.map((collaborator) =>
+            .from("company_targets")
+            .upsert(
+              { month, amount: Number(dadosVisiveis.metaMensal || 0) },
+              { onConflict: "month" },
+            ),
+          ...Object.entries(dadosVisiveis.metasEquipe).map(([representationId, amount]) =>
             supabase
-              .from("collaborators")
-              .update({
-                full_name: collaborator.nome,
-                role: collaborator.cargo,
-                avatar_url: collaborator.foto,
-                quotas: Number(collaborator.cotas || 0),
-              })
-              .eq("id", collaborator.id),
+              .from("targets")
+              .upsert(
+                { representation_id: representationId, month, amount: Number(amount || 0) },
+                { onConflict: "representation_id,month" },
+              ),
           ),
-        ]);
+          ...Object.entries(dadosVisiveis.metasColaborador).map(([collaboratorId, amount]) =>
+            supabase
+              .from("collaborator_targets")
+              .upsert(
+                { collaborator_id: collaboratorId, month, amount: Number(amount || 0) },
+                { onConflict: "collaborator_id,month" },
+              ),
+          ),
+          ...dadosVisiveis.representacoes.flatMap((representation) => [
+            supabase
+              .from("representations")
+              .update({
+                name: representation.nome,
+                logo_url: representation.logo,
+                representative_name: representation.representante,
+              })
+              .eq("id", representation.id),
+            ...representation.colaboradores.map((collaborator) =>
+              supabase
+                .from("collaborators")
+                .update({
+                  full_name: collaborator.nome,
+                  role: collaborator.cargo,
+                  avatar_url: collaborator.foto,
+                  quotas: Number(collaborator.cotas || 0),
+                })
+                .eq("id", collaborator.id),
+            ),
+            ...representation.colaboradores.map((collaborator) =>
+              supabase.from("collaborator_results").upsert(
+                {
+                  collaborator_id: collaborator.id,
+                  month,
+                  first_half: Number(collaborator.quinzena1 || 0),
+                  second_half: Number(collaborator.quinzena2 || 0),
+                  quotas: Number(collaborator.cotas || 0),
+                },
+                { onConflict: "collaborator_id,month" },
+              ),
+            ),
+          ]),
+        ];
         const results = await Promise.all(operations);
         const failed = results.find((result) => result.error);
         if (failed?.error) {
