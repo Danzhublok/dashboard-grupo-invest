@@ -105,6 +105,14 @@ function Dashboard() {
     (total, venda) => total + Number(venda.valor || 0),
     0,
   );
+  const cancelamentosPorRepresentacao = representacoes
+    .map((representacao) => ({
+      name: representacao.nome,
+      value: vendasCanceladas
+        .filter((venda) => venda.representationId === representacao.id)
+        .reduce((total, venda) => total + Number(venda.valor || 0), 0),
+    }))
+    .filter((representacao) => representacao.value > 0);
   const ranking = [...representacoes].sort(
     (a, b) => lucroRepresentacaoPorPeriodo(b, periodoSelecionado) - lucroRepresentacaoPorPeriodo(a, periodoSelecionado),
   );
@@ -329,6 +337,41 @@ function Dashboard() {
                   <span className="text-sm font-semibold">{brl(lucroMensal(r))}</span>
                 </div>
               ))}
+            </CardContent>
+          </Card>
+        </section>
+
+        <section className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
+          <Card className="surface-card border-border/60">
+            <CardHeader>
+              <CardTitle>Vendas canceladas por representação</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[340px]">
+              {cancelamentosPorRepresentacao.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-center text-sm text-muted-foreground">
+                  Nenhuma venda cancelada no período selecionado.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={cancelamentosPorRepresentacao}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={70}
+                      outerRadius={115}
+                      paddingAngle={3}
+                      isAnimationActive={false}
+                    >
+                      {cancelamentosPorRepresentacao.map((entry, index) => (
+                        <Cell key={entry.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value: number) => brl(value)} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
         </section>
