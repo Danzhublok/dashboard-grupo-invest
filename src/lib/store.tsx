@@ -41,6 +41,13 @@ type Ctx = {
     quinzena: "quinzena1" | "quinzena2";
   }) => void;
   cancelarVenda: (saleId: string, motivo: string) => void;
+  cancelarVendaNaoListada: (input: {
+    representationId: string;
+    collaboratorId: string;
+    valor: number;
+    quinzena: "quinzena1" | "quinzena2";
+    motivo: string;
+  }) => void;
   salvar: () => Promise<boolean>;
   resetar: () => void;
   deleteUsuario: (userId: string) => Promise<boolean>;
@@ -666,6 +673,66 @@ export function StoreProvider({
 
         if (supabase) {
           void report(supabase.rpc("cancel_sale", { sale_id: saleId, reason: motivoLimpo }));
+        }
+      },
+      cancelarVendaNaoListada: ({ representationId, collaboratorId, valor, quinzena, motivo }) => {
+        const motivoLimpo = motivo.trim();
+        const vendaId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
+        const agora = new Date().toISOString();
+        if (!motivoLimpo || valor <= 0) return;
+
+        setDados((current) => ({
+          ...current,
+          vendas: [
+            {
+              id: vendaId,
+              representationId,
+              collaboratorId,
+              valor,
+              quinzena,
+              data: agora,
+              status: "cancelada",
+              motivoCancelamento: motivoLimpo,
+              canceladaEm: agora,
+            },
+            ...current.vendas,
+          ],
+          representacoes: current.representacoes.map((rep) =>
+            rep.id !== representationId
+              ? rep
+              : {
+                  ...rep,
+                  colaboradores: rep.colaboradores.map((collaborator) =>
+                    collaborator.id !== collaboratorId
+                      ? collaborator
+                      : {
+                          ...collaborator,
+                          cotas: Math.max(0, Number(collaborator.cotas || 0) - 1),
+                          quinzena1:
+                            quinzena === "quinzena1"
+                              ? Math.max(0, Number(collaborator.quinzena1 || 0) - valor)
+                              : collaborator.quinzena1,
+                          quinzena2:
+                            quinzena === "quinzena2"
+                              ? Math.max(0, Number(collaborator.quinzena2 || 0) - valor)
+                              : collaborator.quinzena2,
+                        },
+                  ),
+                },
+          ),
+        }));
+
+        if (supabase) {
+          void report(
+            supabase.rpc("cancel_unlisted_sale", {
+              sale_id: vendaId,
+              target_representation_id: representationId,
+              target_collaborator_id: collaboratorId,
+              sale_amount: valor,
+              sale_half: quinzena,
+              reason: motivoLimpo,
+            }),
+          );
         }
       },
       salvar: async () => {
