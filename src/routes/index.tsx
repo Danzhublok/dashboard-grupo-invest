@@ -98,25 +98,27 @@ function Dashboard() {
   const [mesSelecionado, setMesSelecionado] = useState(new Date().toISOString().slice(0, 7));
   const [periodoSelecionado, setPeriodoSelecionado] = useState<DashboardPeriod>("geral");
   const representacoes = dados.representacoes;
-  const ganhoTotal = somaLucroPorPeriodo(representacoes, periodoSelecionado);
+  const ganhoLiquidoVendas = somaLucroPorPeriodo(representacoes, periodoSelecionado);
   const saidasMes = dados.saidas.filter((saida) => saida.data.startsWith(mesSelecionado));
   const saidasAnterior = dados.saidas.filter((saida) =>
     saida.data.startsWith(mesAnterior(mesSelecionado)),
   );
   const totalSaidas = saidasMes.reduce((sum, saida) => sum + saida.valor, 0);
   const totalSaidasAnterior = saidasAnterior.reduce((sum, saida) => sum + saida.valor, 0);
-  const lucroMes = ganhoTotal - totalSaidas;
   const cotasTotais = somaCotas(representacoes);
-  const ticketMedio = cotasTotais ? Math.round(ganhoTotal / cotasTotais) : 0;
+  const ticketMedio = cotasTotais ? Math.round(ganhoLiquidoVendas / cotasTotais) : 0;
   const vendasCanceladas = dados.vendas.filter(
     (venda) =>
       venda.status === "cancelada" &&
+      venda.data.startsWith(mesSelecionado) &&
       (periodoSelecionado === "geral" || venda.quinzena === periodoSelecionado),
   );
   const valorCancelado = vendasCanceladas.reduce(
     (total, venda) => total + Number(venda.valor || 0),
     0,
   );
+  const ganhoBruto = ganhoLiquidoVendas + valorCancelado;
+  const lucroTotal = ganhoBruto - valorCancelado - totalSaidas;
   const cancelamentosPorRepresentacao = representacoes
     .map((representacao) => ({
       name: representacao.nome,
@@ -141,9 +143,14 @@ function Dashboard() {
       }, {}),
   )
     .sort((a, b) => a.data.localeCompare(b.data))
-    .map((dia) => ({ ...dia, label: new Date(`${dia.data}T12:00:00`).toLocaleDateString("pt-BR") }));
+    .map((dia) => ({
+      ...dia,
+      label: new Date(`${dia.data}T12:00:00`).toLocaleDateString("pt-BR"),
+    }));
   const ranking = [...representacoes].sort(
-    (a, b) => lucroRepresentacaoPorPeriodo(b, periodoSelecionado) - lucroRepresentacaoPorPeriodo(a, periodoSelecionado),
+    (a, b) =>
+      lucroRepresentacaoPorPeriodo(b, periodoSelecionado) -
+      lucroRepresentacaoPorPeriodo(a, periodoSelecionado),
   );
   const lider = ranking[0];
   const pieData = representacoes.map((r) => ({
@@ -186,7 +193,7 @@ function Dashboard() {
                 Investimentos &amp; Consórcios
               </p>
               <h1 className="mt-2 text-3xl font-bold md:text-4xl">
-               GRUPO INVEST | PAINEL EXECUTIVO DE PERFORMANCE
+                GRUPO INVEST | PAINEL EXECUTIVO DE PERFORMANCE
               </h1>
               <p className="mt-2 max-w-2xl text-sm opacity-85 md:text-base">
                 Produção • Receita • Rentabilidade • Representações • Performance Individual
@@ -237,8 +244,8 @@ function Dashboard() {
           <KpiCard
             icon={Wallet}
             label="Lucro total"
-            value={brl(lucroMes)}
-            hint="Ganho menos saídas do período"
+            value={brl(lucroTotal)}
+            hint="Ganho bruto menos cancelamentos e saídas"
           />
           <KpiCard
             icon={Coins}
@@ -264,9 +271,9 @@ function Dashboard() {
           />
           <KpiCard
             icon={TrendingUp}
-            label="Ganho do período"
-            value={brl(ganhoTotal)}
-            hint={`${periodoLabel[periodoSelecionado]} · vendas das representações`}
+            label="Ganho bruto"
+            value={brl(ganhoBruto)}
+            hint={`${periodoLabel[periodoSelecionado]} · antes dos cancelamentos`}
           />
           <KpiCard
             icon={ArrowDownToLine}
@@ -423,8 +430,16 @@ function Dashboard() {
                       fontSize={12}
                       tickFormatter={(value: number) => brl(value)}
                     />
-                    <Tooltip formatter={(value: number) => brl(value)} labelFormatter={(label) => `Dia ${label}`} />
-                    <Bar dataKey="valor" name="Vendas" fill="var(--chart-2)" radius={[6, 6, 0, 0]} />
+                    <Tooltip
+                      formatter={(value: number) => brl(value)}
+                      labelFormatter={(label) => `Dia ${label}`}
+                    />
+                    <Bar
+                      dataKey="valor"
+                      name="Vendas"
+                      fill="var(--chart-2)"
+                      radius={[6, 6, 0, 0]}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               )}
