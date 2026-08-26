@@ -41,6 +41,7 @@ type Ctx = {
     quinzena: "quinzena1" | "quinzena2";
   }) => void;
   cancelarVenda: (saleId: string, motivo: string) => void;
+  revogarCancelamento: (saleId: string) => void;
   cancelarVendaNaoListada: (input: {
     representationId: string;
     collaboratorId: string;
@@ -673,6 +674,56 @@ export function StoreProvider({
 
         if (supabase) {
           void report(supabase.rpc("cancel_sale", { sale_id: saleId, reason: motivoLimpo }));
+        }
+      },
+      revogarCancelamento: (saleId) => {
+        const venda = dados.vendas.find((item) => item.id === saleId);
+        if (!venda || venda.status !== "cancelada") return;
+
+        const mesAtual = new Date().toISOString().slice(0, 7);
+        const vendaNoMesAtual = venda.data.slice(0, 7) === mesAtual;
+
+        setDados((current) => ({
+          ...current,
+          vendas: current.vendas.map((item) =>
+            item.id === saleId
+              ? {
+                  ...item,
+                  status: "ativa",
+                  motivoCancelamento: undefined,
+                  canceladaEm: undefined,
+                }
+              : item,
+          ),
+          representacoes: vendaNoMesAtual
+            ? current.representacoes.map((rep) =>
+                rep.id !== venda.representationId
+                  ? rep
+                  : {
+                      ...rep,
+                      colaboradores: rep.colaboradores.map((collaborator) =>
+                        collaborator.id !== venda.collaboratorId
+                          ? collaborator
+                          : {
+                              ...collaborator,
+                              cotas: Number(collaborator.cotas || 0) + 1,
+                              quinzena1:
+                                venda.quinzena === "quinzena1"
+                                  ? Number(collaborator.quinzena1 || 0) + venda.valor
+                                  : collaborator.quinzena1,
+                              quinzena2:
+                                venda.quinzena === "quinzena2"
+                                  ? Number(collaborator.quinzena2 || 0) + venda.valor
+                                  : collaborator.quinzena2,
+                            },
+                      ),
+                    },
+              )
+            : current.representacoes,
+        }));
+
+        if (supabase) {
+          void report(supabase.rpc("revoke_sale_cancellation", { sale_id: saleId }));
         }
       },
       cancelarVendaNaoListada: ({ representationId, collaboratorId, valor, quinzena, motivo }) => {

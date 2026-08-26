@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Ban, Plus } from "lucide-react";
+import { Ban, Plus, RotateCcw } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { AppLayout } from "@/components/AppLayout";
@@ -19,7 +19,7 @@ import { useStore } from "@/lib/store";
 export const Route = createFileRoute("/cancelamentos")({ component: CancelamentosPage });
 
 function CancelamentosPage() {
-  const { dados, cancelarVenda, cancelarVendaNaoListada } = useStore();
+  const { dados, cancelarVenda, cancelarVendaNaoListada, revogarCancelamento } = useStore();
   const [modalAberto, setModalAberto] = useState(false);
   const [representacaoId, setRepresentacaoId] = useState("");
   const [colaboradorId, setColaboradorId] = useState("");
@@ -136,7 +136,18 @@ function CancelamentosPage() {
                           {item.data}
                         </p>
                       </div>
-                      <strong>{brl(venda.valor)}</strong>
+                      <div className="flex items-center gap-3">
+                        <strong>{brl(venda.valor)}</strong>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                          onClick={() => revogarCancelamento(venda.id)}
+                        >
+                          <RotateCcw className="size-4" />
+                          Revogar cancelamento
+                        </Button>
+                      </div>
                     </div>
                     <p className="mt-2 text-sm text-muted-foreground">
                       <span className="font-medium text-foreground">Motivo:</span>{" "}
