@@ -75,7 +75,7 @@ function CancelamentosPage() {
     setModalAberto(true);
   };
 
-  const confirmar = () => {
+  const confirmar = async () => {
     if (!vendaId || !motivo.trim()) return;
     if (vendaId === "nao-listada") {
       const valor = Number(valorNaoListado);
@@ -90,8 +90,8 @@ function CancelamentosPage() {
       setModalAberto(false);
       return;
     }
-    cancelarVenda(vendaId, motivo);
-    setModalAberto(false);
+    const cancelado = await cancelarVenda(vendaId, motivo);
+    if (cancelado) setModalAberto(false);
   };
 
   return (

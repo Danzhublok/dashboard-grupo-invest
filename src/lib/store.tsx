@@ -42,7 +42,7 @@ type Ctx = {
     valor: number;
     quinzena: "quinzena1" | "quinzena2";
   }) => void;
-  cancelarVenda: (saleId: string, motivo: string) => void;
+  cancelarVenda: (saleId: string, motivo: string) => Promise<boolean>;
   revogarCancelamento: (saleId: string) => void;
   cancelarVendaNaoListada: (input: {
     representationId: string;
@@ -645,13 +645,24 @@ export function StoreProvider({
           }
         }
       },
-      cancelarVenda: (saleId, motivo) => {
+      cancelarVenda: async (saleId, motivo) => {
         const venda = dados.vendas.find((item) => item.id === saleId);
-        if (!venda || venda.status === "cancelada") return;
+        if (!venda || venda.status === "cancelada") return false;
 
         const motivoLimpo = motivo.trim();
         const canceladaEm = new Date().toISOString();
         const vendaNoMesSelecionado = venda.data.slice(0, 7) === mesSelecionado;
+
+        if (supabase) {
+          const { error } = await supabase.rpc("cancel_sale", {
+            sale_id: saleId,
+            reason: motivoLimpo,
+          });
+          if (error) {
+            setErro(error.message);
+            return false;
+          }
+        }
 
         setDados((current) => ({
           ...current,
@@ -686,10 +697,8 @@ export function StoreProvider({
               )
             : current.representacoes,
         }));
-
-        if (supabase) {
-          void report(supabase.rpc("cancel_sale", { sale_id: saleId, reason: motivoLimpo }));
-        }
+        setErro(null);
+        return true;
       },
       revogarCancelamento: (saleId) => {
         const venda = dados.vendas.find((item) => item.id === saleId);
