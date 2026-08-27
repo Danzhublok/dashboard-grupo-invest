@@ -651,9 +651,7 @@ export function StoreProvider({
 
         const motivoLimpo = motivo.trim();
         const canceladaEm = new Date().toISOString();
-        const mesDaVenda = venda.data.slice(0, 10);
-        const mesAtual = new Date().toISOString().slice(0, 7);
-        const vendaNoMesAtual = mesDaVenda.slice(0, 7) === mesAtual;
+        const vendaNoMesSelecionado = venda.data.slice(0, 7) === mesSelecionado;
 
         setDados((current) => ({
           ...current,
@@ -662,7 +660,7 @@ export function StoreProvider({
               ? { ...item, status: "cancelada", motivoCancelamento: motivoLimpo, canceladaEm }
               : item,
           ),
-          representacoes: vendaNoMesAtual
+          representacoes: vendaNoMesSelecionado
             ? current.representacoes.map((rep) =>
                 rep.id !== venda.representationId
                   ? rep
@@ -697,8 +695,7 @@ export function StoreProvider({
         const venda = dados.vendas.find((item) => item.id === saleId);
         if (!venda || venda.status !== "cancelada") return;
 
-        const mesAtual = new Date().toISOString().slice(0, 7);
-        const vendaNoMesAtual = venda.data.slice(0, 7) === mesAtual;
+        const vendaNoMesSelecionado = venda.data.slice(0, 7) === mesSelecionado;
 
         setDados((current) => ({
           ...current,
@@ -712,7 +709,7 @@ export function StoreProvider({
                 }
               : item,
           ),
-          representacoes: vendaNoMesAtual
+          representacoes: vendaNoMesSelecionado
             ? current.representacoes.map((rep) =>
                 rep.id !== venda.representationId
                   ? rep

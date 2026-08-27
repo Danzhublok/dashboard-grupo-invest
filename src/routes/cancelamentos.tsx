@@ -35,7 +35,10 @@ function CancelamentosPage() {
     [dados.vendas],
   );
   const vendasCanceladas = useMemo(
-    () => dados.vendas.filter((venda) => venda.status === "cancelada"),
+    () =>
+      dados.vendas
+        .filter((venda) => venda.status === "cancelada")
+        .sort((a, b) => (b.canceladaEm ?? b.data).localeCompare(a.canceladaEm ?? a.data)),
     [dados.vendas],
   );
   const colaboradores = useMemo(
