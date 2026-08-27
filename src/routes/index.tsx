@@ -93,9 +93,8 @@ function KpiCard({
 }
 
 function Dashboard() {
-  const { dados } = useStore();
+  const { dados, mesSelecionado, setMesSelecionado } = useStore();
   const { session } = useAuth();
-  const [mesSelecionado, setMesSelecionado] = useState(new Date().toISOString().slice(0, 7));
   const [periodoSelecionado, setPeriodoSelecionado] = useState<DashboardPeriod>("geral");
   const representacoes = dados.representacoes;
   const ganhoLiquidoVendas = somaLucroPorPeriodo(representacoes, periodoSelecionado);

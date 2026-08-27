@@ -13,6 +13,8 @@ import { supabase } from "@/lib/supabase";
 
 type Ctx = {
   dados: DadosApp;
+  mesSelecionado: string;
+  setMesSelecionado: (month: string) => void;
   pronto: boolean;
   erro: string | null;
   usuarios: UsuarioPainel[];
@@ -68,6 +70,8 @@ const currentMonth = () => {
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
 };
 
+const monthKey = (month: string) => `${month}-01`;
+
 export function StoreProvider({
   children,
   representationId,
@@ -82,6 +86,7 @@ export function StoreProvider({
   const [pronto, setPronto] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [usuarios, setUsuarios] = useState<UsuarioPainel[]>([]);
+  const [mesSelecionado, setMesSelecionado] = useState(() => new Date().toISOString().slice(0, 7));
 
   useEffect(() => {
     let active = true;
@@ -92,12 +97,11 @@ export function StoreProvider({
       }
 
       setErro(null);
-      const inicioMes = new Date();
-      inicioMes.setDate(1);
+      const inicioMes = new Date(`${mesSelecionado}-01T12:00:00`);
       const inicioProximoMes = new Date(inicioMes);
       inicioProximoMes.setMonth(inicioProximoMes.getMonth() + 1);
-      const mesAtual = inicioMes.toISOString().slice(0, 10);
-      const proximoMes = inicioProximoMes.toISOString().slice(0, 10);
+      const mesAtual = monthKey(mesSelecionado);
+      const proximoMes = `${inicioProximoMes.getFullYear()}-${String(inicioProximoMes.getMonth() + 1).padStart(2, "0")}-01`;
 
       const responses = await Promise.all([
         supabase.from("representations").select("id, name, logo_url, representative_name"),
@@ -106,7 +110,7 @@ export function StoreProvider({
           .select("id, representation_id, full_name, role, avatar_url, quotas"),
         supabase
           .from("collaborator_results")
-          .select("collaborator_id, month, first_half, second_half")
+          .select("collaborator_id, month, first_half, second_half, quotas")
           .gte("month", mesAtual)
           .lt("month", proximoMes),
         supabase.from("expenses").select("id, representation_id, reason, amount, occurred_on"),
@@ -136,6 +140,8 @@ export function StoreProvider({
           .select(
             "id, representation_id, collaborator_id, amount, half, sold_at, status, cancellation_reason, cancelled_at",
           )
+          .gte("sold_at", `${mesAtual}T00:00:00-03:00`)
+          .lt("sold_at", `${proximoMes}T00:00:00-03:00`)
           .order("sold_at", { ascending: false }),
       ]);
 
@@ -162,7 +168,10 @@ export function StoreProvider({
       ] = responses;
 
       if (!active) return;
-      const resultsByCollaborator = new Map<string, { first: number; second: number }>();
+      const resultsByCollaborator = new Map<
+        string,
+        { first: number; second: number; quotas: number }
+      >();
       const collaboratorsWithCanonicalResult = new Set<string>();
       (results ?? []).forEach((result) => {
         // New writes use the first day as the canonical monthly record. When
@@ -172,6 +181,7 @@ export function StoreProvider({
           resultsByCollaborator.set(result.collaborator_id, {
             first: Number(result.first_half ?? 0),
             second: Number(result.second_half ?? 0),
+            quotas: Number(result.quotas ?? 0),
           });
           collaboratorsWithCanonicalResult.add(result.collaborator_id);
           return;
@@ -181,10 +191,12 @@ export function StoreProvider({
         const previous = resultsByCollaborator.get(result.collaborator_id) ?? {
           first: 0,
           second: 0,
+          quotas: 0,
         };
         resultsByCollaborator.set(result.collaborator_id, {
           first: previous.first + Number(result.first_half ?? 0),
           second: previous.second + Number(result.second_half ?? 0),
+          quotas: previous.quotas + Number(result.quotas ?? 0),
         });
       });
 
@@ -245,13 +257,17 @@ export function StoreProvider({
           colaboradores: (collaborators ?? [])
             .filter((collaborator) => collaborator.representation_id === rep.id)
             .map((collaborator) => {
-              const result = resultsByCollaborator.get(collaborator.id) ?? { first: 0, second: 0 };
+              const result = resultsByCollaborator.get(collaborator.id) ?? {
+                first: 0,
+                second: 0,
+                quotas: 0,
+              };
               return {
                 id: collaborator.id,
                 nome: collaborator.full_name,
                 cargo: collaborator.role as Colaborador["cargo"],
                 foto: collaborator.avatar_url ?? undefined,
-                cotas: collaborator.quotas,
+                cotas: result.quotas,
                 quinzena1: result.first,
                 quinzena2: result.second,
               };
@@ -264,7 +280,7 @@ export function StoreProvider({
     return () => {
       active = false;
     };
-  }, [representationId, representationName, session?.userId]);
+  }, [mesSelecionado, representationId, representationName, session?.userId]);
 
   const dadosVisiveis = useMemo(
     () =>
@@ -289,6 +305,8 @@ export function StoreProvider({
 
     return {
       dados: dadosVisiveis,
+      mesSelecionado,
+      setMesSelecionado,
       pronto,
       erro,
       usuarios,
@@ -298,7 +316,7 @@ export function StoreProvider({
           void report(
             supabase.from("company_targets").upsert(
               {
-                month: currentMonth(),
+                month: monthKey(mesSelecionado),
                 amount: v,
               },
               { onConflict: "month" },
@@ -316,7 +334,7 @@ export function StoreProvider({
             supabase.from("targets").upsert(
               {
                 representation_id: representationId,
-                month: currentMonth(),
+                month: monthKey(mesSelecionado),
                 amount: value,
               },
               { onConflict: "representation_id,month" },
@@ -333,7 +351,7 @@ export function StoreProvider({
             supabase.from("collaborator_targets").upsert(
               {
                 collaborator_id: collaboratorId,
-                month: currentMonth(),
+                month: monthKey(mesSelecionado),
                 amount: value,
               },
               { onConflict: "collaborator_id,month" },
@@ -485,7 +503,6 @@ export function StoreProvider({
                 full_name: patch.nome,
                 role: patch.cargo,
                 avatar_url: patch.foto,
-                quotas: patch.cotas === undefined ? undefined : Number(patch.cotas || 0),
               })
               .eq("id", colId),
           );
@@ -498,7 +515,7 @@ export function StoreProvider({
               supabase.from("collaborator_results").upsert(
                 {
                   collaborator_id: colId,
-                  month: currentMonth(),
+                  month: monthKey(mesSelecionado),
                   first_half: Number(next.quinzena1 || 0),
                   second_half: Number(next.quinzena2 || 0),
                   quotas: Number(next.cotas || 0),
@@ -789,7 +806,7 @@ export function StoreProvider({
       salvar: async () => {
         if (!supabase) return true;
 
-        const month = currentMonth();
+        const month = monthKey(mesSelecionado);
         const operations = [
           supabase
             .from("company_targets")
@@ -829,7 +846,6 @@ export function StoreProvider({
                   full_name: collaborator.nome,
                   role: collaborator.cargo,
                   avatar_url: collaborator.foto,
-                  quotas: Number(collaborator.cotas || 0),
                 })
                 .eq("id", collaborator.id),
             ),
@@ -859,7 +875,7 @@ export function StoreProvider({
       },
       resetar: () => setDados(dadosIniciais),
     };
-  }, [dados, dadosVisiveis, erro, pronto, session?.userId, usuarios]);
+  }, [dados, dadosVisiveis, erro, mesSelecionado, pronto, session?.userId, usuarios]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }

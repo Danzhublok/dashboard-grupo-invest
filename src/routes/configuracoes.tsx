@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useRef, useState } from "react";
-import { Check, ImagePlus, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { CalendarDays, Check, ImagePlus, Plus, RotateCcw, Trash2 } from "lucide-react";
 
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -287,7 +287,8 @@ function RepEditor({ rep, isAdmin }: { rep: Representacao; isAdmin: boolean }) {
 }
 
 function Configuracoes() {
-  const { dados, setMeta, addRepresentacao, resetar, salvar } = useStore();
+  const { dados, mesSelecionado, setMesSelecionado, setMeta, addRepresentacao, resetar, salvar } =
+    useStore();
   const { session } = useAuth();
   const isAdmin = session?.role === "admin";
   const [nome, setNome] = useState("");
@@ -330,6 +331,27 @@ function Configuracoes() {
             </Button>
           </div>
         </div>
+
+        <Card className="surface-card border-border/60">
+          <CardContent className="flex flex-wrap items-end gap-4 p-5">
+            <div className="space-y-2">
+              <Label htmlFor="mes-configuracoes">Mês dos dados</Label>
+              <div className="flex items-center gap-2">
+                <CalendarDays className="size-4 text-muted-foreground" />
+                <Input
+                  id="mes-configuracoes"
+                  type="month"
+                  className="w-48"
+                  value={mesSelecionado}
+                  onChange={(event) => setMesSelecionado(event.target.value)}
+                />
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Valores, cotas e metas abaixo pertencem ao mês selecionado.
+            </p>
+          </CardContent>
+        </Card>
 
         {isAdmin && (
           <Card className="surface-card border-border/60">
