@@ -42,6 +42,17 @@ type Ctx = {
     valor: number;
     quinzena: "quinzena1" | "quinzena2";
   }) => void;
+  importarVendas: (input: {
+    month: string;
+    half: "quinzena1" | "quinzena2";
+    sales: Array<{
+      row: number;
+      date: string;
+      representationId: string;
+      collaboratorId: string;
+      amount: number;
+    }>;
+  }) => Promise<boolean>;
   cancelarVenda: (saleId: string, motivo: string) => Promise<boolean>;
   revogarCancelamento: (saleId: string) => void;
   cancelarVendaNaoListada: (input: {
@@ -87,6 +98,7 @@ export function StoreProvider({
   const [erro, setErro] = useState<string | null>(null);
   const [usuarios, setUsuarios] = useState<UsuarioPainel[]>([]);
   const [mesSelecionado, setMesSelecionado] = useState(() => new Date().toISOString().slice(0, 7));
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -280,7 +292,7 @@ export function StoreProvider({
     return () => {
       active = false;
     };
-  }, [mesSelecionado, representationId, representationName, session?.userId]);
+  }, [mesSelecionado, reloadToken, representationId, representationName, session?.userId]);
 
   const dadosVisiveis = useMemo(
     () =>
@@ -644,6 +656,25 @@ export function StoreProvider({
             );
           }
         }
+      },
+      importarVendas: async ({ month, half, sales }) => {
+        if (!supabase) {
+          setErro("A importação exige conexão com o banco de dados.");
+          return false;
+        }
+        const { error } = await supabase.rpc("replace_sales_import", {
+          import_month: `${month}-01`,
+          import_half: half,
+          imported_sales: sales,
+        });
+        if (error) {
+          setErro(error.message);
+          return false;
+        }
+        setErro(null);
+        if (month !== mesSelecionado) setMesSelecionado(month);
+        else setReloadToken((value) => value + 1);
+        return true;
       },
       cancelarVenda: async (saleId, motivo) => {
         const venda = dados.vendas.find((item) => item.id === saleId);
