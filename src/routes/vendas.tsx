@@ -172,7 +172,11 @@ function VendasPage() {
   const unresolvedCount = preview.filter((row) => !row.collaboratorId).length;
   const divergentDateCount = preview.filter((row) => row.date.slice(0, 7) !== importMonth).length;
   const inconsistent = unresolvedCount > 0 || divergentDateCount > 0;
-  const importTotal = preview.reduce((sum, row) => sum + row.amount, 0);
+  const importTotal = preview.reduce(
+    (sum, row) => sum + (row.status === "ativa" ? row.amount : 0),
+    0,
+  );
+  const cancelledCount = preview.filter((row) => row.status === "cancelada").length;
 
   const confirmImport = async () => {
     if (!importMonth) {
@@ -195,6 +199,7 @@ function VendasPage() {
         representationId: row.representationId,
         collaboratorId: row.collaboratorId,
         amount: row.amount,
+        status: row.status,
       })),
     });
     setImporting(false);
@@ -460,8 +465,9 @@ function VendasPage() {
               </Card>
               <Card>
                 <CardContent className="pt-4">
-                  <p className="text-xs text-muted-foreground">Valor total</p>
+                  <p className="text-xs text-muted-foreground">Total ativo</p>
                   <p className="font-semibold">{brl(importTotal)}</p>
+                  <p className="text-xs text-muted-foreground">{cancelledCount} cancelada(s)</p>
                 </CardContent>
               </Card>
             </div>
@@ -482,6 +488,7 @@ function VendasPage() {
                     <th className="p-3">Data</th>
                     <th className="p-3">Nome na planilha</th>
                     <th className="p-3">Consultor no sistema</th>
+                    <th className="p-3">Status</th>
                     <th className="p-3 text-right">Valor</th>
                   </tr>
                 </thead>
@@ -537,6 +544,23 @@ function VendasPage() {
                               </option>
                             )),
                           )}
+                        </select>
+                      </td>
+                      <td className="p-3">
+                        <select
+                          className={`h-9 rounded-md border bg-background px-2 ${row.status === "cancelada" ? "border-destructive text-destructive" : ""}`}
+                          value={row.status}
+                          onChange={(event) => {
+                            const status = event.target.value as "ativa" | "cancelada";
+                            setPreview((current) =>
+                              current.map((item, itemIndex) =>
+                                itemIndex === index ? { ...item, status } : item,
+                              ),
+                            );
+                          }}
+                        >
+                          <option value="ativa">Ativa</option>
+                          <option value="cancelada">Cancelada</option>
                         </select>
                       </td>
                       <td className="p-3 text-right font-medium">{brl(row.amount)}</td>

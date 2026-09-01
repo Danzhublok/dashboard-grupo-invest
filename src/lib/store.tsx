@@ -49,6 +49,7 @@ type Ctx = {
       representationId: string;
       collaboratorId: string;
       amount: number;
+      status: "ativa" | "cancelada";
     }>;
   }) => Promise<boolean>;
   cancelarVenda: (saleId: string, motivo: string) => Promise<boolean>;
@@ -660,12 +661,12 @@ export function StoreProvider({
           setErro("A importação exige conexão com o banco de dados.");
           return false;
         }
-        const { error } = await supabase.rpc("replace_sales_import_batch", {
+        const { error } = await supabase.rpc("replace_sales_import_batch_v2", {
           imported_sales: sales,
         });
         if (
           error &&
-          !/replace_sales_import_batch|schema cache|could not find/i.test(error.message)
+          !/replace_sales_import_batch_v2|schema cache|could not find/i.test(error.message)
         ) {
           setErro(error.message);
           return false;
@@ -729,6 +730,10 @@ export function StoreProvider({
               amount: sale.amount,
               half: Number(sale.date.slice(8, 10)) <= 14 ? "quinzena1" : "quinzena2",
               sold_at: `${sale.date}T12:00:00-03:00`,
+              status: sale.status,
+              cancellation_reason:
+                sale.status === "cancelada" ? "Venda cancelada - marcada em vermelho" : null,
+              cancelled_at: sale.status === "cancelada" ? new Date().toISOString() : null,
               created_by: session?.userId ?? null,
             })),
           );

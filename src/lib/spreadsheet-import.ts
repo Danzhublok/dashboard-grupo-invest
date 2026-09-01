@@ -11,6 +11,20 @@ export type ImportedSale = {
   collaborator: string;
   amount: number;
   half: "quinzena1" | "quinzena2";
+  status: "ativa" | "cancelada";
+};
+
+type StyledCell = XLSX.CellObject & {
+  s?: { font?: { color?: { rgb?: string } }; fill?: { fgColor?: { rgb?: string } } };
+};
+
+const isRedHex = (rgb?: string) => {
+  const hex = rgb?.replace(/^#/, "").slice(-6);
+  if (!hex || hex.length !== 6) return false;
+  const red = Number.parseInt(hex.slice(0, 2), 16);
+  const green = Number.parseInt(hex.slice(2, 4), 16);
+  const blue = Number.parseInt(hex.slice(4, 6), 16);
+  return red > 140 && red - green > 35 && red - blue > 35;
 };
 
 const normalize = (value: unknown) =>
@@ -54,7 +68,11 @@ function parseAmount(value: unknown) {
 }
 
 export async function readSalesSpreadsheet(file: File): Promise<ImportedSale[]> {
-  const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+  const workbook = XLSX.read(await file.arrayBuffer(), {
+    type: "array",
+    cellDates: true,
+    cellStyles: true,
+  });
   const sales: ImportedSale[] = [];
 
   for (const sheetName of workbook.SheetNames) {
@@ -88,6 +106,13 @@ export async function readSalesSpreadsheet(file: File): Promise<ImportedSale[]> 
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, "0");
       const day = String(date.getDate()).padStart(2, "0");
+      const worksheetRow = headerIndex + offset + 1;
+      const cancelled = row.some((_, column) => {
+        const cell = workbook.Sheets[sheetName][
+          XLSX.utils.encode_cell({ r: worksheetRow, c: column })
+        ] as StyledCell | undefined;
+        return isRedHex(cell?.s?.font?.color?.rgb) || isRedHex(cell?.s?.fill?.fgColor?.rgb);
+      });
       sales.push({
         row: headerIndex + offset + 2,
         date: `${year}-${month}-${day}`,
@@ -95,6 +120,7 @@ export async function readSalesSpreadsheet(file: File): Promise<ImportedSale[]> 
         collaborator,
         amount: Math.round(amount * 100) / 100,
         half: date.getDate() <= 14 ? "quinzena1" : "quinzena2",
+        status: cancelled ? "cancelada" : "ativa",
       });
     });
   }
@@ -105,6 +131,31 @@ export async function readSalesSpreadsheet(file: File): Promise<ImportedSale[]> 
 }
 
 type PositionedText = { text: string; x: number; y: number };
+
+function hasRedPixels(
+  context: CanvasRenderingContext2D,
+  viewport: { convertToViewportPoint: (x: number, y: number) => [number, number] },
+  y: number,
+  side: "left" | "right",
+) {
+  const [startX, endX] = side === "left" ? [45, 430] : [450, 805];
+  const [canvasStartX, canvasY] = viewport.convertToViewportPoint(startX, y + 3);
+  const [canvasEndX, canvasEndY] = viewport.convertToViewportPoint(endX, y - 3);
+  const x = Math.max(0, Math.floor(Math.min(canvasStartX, canvasEndX)));
+  const top = Math.max(0, Math.floor(Math.min(canvasY, canvasEndY)));
+  const width = Math.max(1, Math.ceil(Math.abs(canvasEndX - canvasStartX)));
+  const height = Math.max(1, Math.ceil(Math.abs(canvasEndY - canvasY)));
+  const pixels = context.getImageData(x, top, width, height).data;
+  let redPixels = 0;
+  for (let index = 0; index < pixels.length; index += 4) {
+    const red = pixels[index];
+    const green = pixels[index + 1];
+    const blue = pixels[index + 2];
+    if (red > 140 && red - green > 35 && red - blue > 35) redPixels += 1;
+    if (redPixels >= 4) return true;
+  }
+  return false;
+}
 
 function pdfRow(items: PositionedText[], row: number, side: "left" | "right") {
   const columns =
@@ -131,6 +182,13 @@ async function readSalesPdf(file: File): Promise<ImportedSale[]> {
   const sales: ImportedSale[] = [];
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber);
+    const viewport = page.getViewport({ scale: 2 });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) throw new Error("Não foi possível analisar as cores do PDF.");
+    await page.render({ canvas, canvasContext: context, viewport }).promise;
     const content = await page.getTextContent();
     const items: PositionedText[] = content.items
       .filter((item): item is TextItem => "str" in item)
@@ -156,6 +214,7 @@ async function readSalesPdf(file: File): Promise<ImportedSale[]> {
           collaborator: values.collaborator,
           amount: Math.round(amount * 100) / 100,
           half: date.getDate() <= 14 ? "quinzena1" : "quinzena2",
+          status: hasRedPixels(context, viewport, row, side) ? "cancelada" : "ativa",
         });
       }
     }
