@@ -43,8 +43,6 @@ type Ctx = {
     quinzena: "quinzena1" | "quinzena2";
   }) => void;
   importarVendas: (input: {
-    month: string;
-    half: "quinzena1" | "quinzena2";
     sales: Array<{
       row: number;
       date: string;
@@ -657,14 +655,12 @@ export function StoreProvider({
           }
         }
       },
-      importarVendas: async ({ month, half, sales }) => {
+      importarVendas: async ({ sales }) => {
         if (!supabase) {
           setErro("A importação exige conexão com o banco de dados.");
           return false;
         }
-        const { error } = await supabase.rpc("replace_sales_import", {
-          import_month: `${month}-01`,
-          import_half: half,
+        const { error } = await supabase.rpc("replace_sales_import_batch", {
           imported_sales: sales,
         });
         if (error) {
@@ -672,7 +668,8 @@ export function StoreProvider({
           return false;
         }
         setErro(null);
-        if (month !== mesSelecionado) setMesSelecionado(month);
+        const month = sales[0]?.date.slice(0, 7);
+        if (month && month !== mesSelecionado) setMesSelecionado(month);
         else setReloadToken((value) => value + 1);
         return true;
       },

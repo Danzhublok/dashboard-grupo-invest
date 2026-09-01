@@ -1,4 +1,8 @@
 import * as XLSX from "xlsx";
+import { getDocument, GlobalWorkerOptions, type TextItem } from "pdfjs-dist";
+import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+
+GlobalWorkerOptions.workerSrc = pdfWorker;
 
 export type ImportedSale = {
   row: number;
@@ -29,7 +33,9 @@ function parseDate(value: unknown): Date | null {
     const parsed = XLSX.SSF.parse_date_code(value);
     return parsed ? new Date(parsed.y, parsed.m - 1, parsed.d, 12) : null;
   }
-  const text = String(value ?? "").trim();
+  const text = String(value ?? "")
+    .trim()
+    .replace(/([/.-])\1+/g, "$1");
   const br = text.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/);
   if (br) {
     const year = Number(br[3]) + (br[3].length === 2 ? 2000 : 0);
@@ -78,7 +84,7 @@ export async function readSalesSpreadsheet(file: File): Promise<ImportedSale[]> 
       const date = parseDate(row[indexes.date]);
       const amount = parseAmount(row[indexes.amount]);
       const collaborator = String(row[indexes.collaborator] ?? "").trim();
-      if (!date || !collaborator || !Number.isFinite(amount) || amount <= 0) return;
+      if (!date || !Number.isFinite(amount) || amount <= 0) return;
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, "0");
       const day = String(date.getDate()).padStart(2, "0");
@@ -96,6 +102,72 @@ export async function readSalesSpreadsheet(file: File): Promise<ImportedSale[]> 
   if (!sales.length)
     throw new Error("Não encontrei linhas com Data, Consultor e Valor na planilha.");
   return sales;
+}
+
+type PositionedText = { text: string; x: number; y: number };
+
+function pdfRow(items: PositionedText[], row: number, side: "left" | "right") {
+  const columns =
+    side === "left"
+      ? { date: [45, 75], manager: [75, 100], collaborator: [100, 130], amount: [315, 375] }
+      : { date: [450, 485], manager: [490, 520], collaborator: [520, 550], amount: [710, 755] };
+  const valueAt = ([from, to]: number[]) =>
+    items
+      .filter((item) => item.y === row && item.x >= from && item.x < to && item.text.trim())
+      .sort((a, b) => a.x - b.x)
+      .map((item) => item.text.trim())
+      .join(" ")
+      .trim();
+  return {
+    date: valueAt(columns.date),
+    manager: valueAt(columns.manager),
+    collaborator: valueAt(columns.collaborator),
+    amount: valueAt(columns.amount),
+  };
+}
+
+async function readSalesPdf(file: File): Promise<ImportedSale[]> {
+  const pdf = await getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const sales: ImportedSale[] = [];
+  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+    const page = await pdf.getPage(pageNumber);
+    const content = await page.getTextContent();
+    const items: PositionedText[] = content.items
+      .filter((item): item is TextItem => "str" in item)
+      .map((item) => ({
+        text: item.str,
+        x: Math.round(item.transform[4]),
+        y: Math.round(item.transform[5]),
+      }));
+    const rows = [...new Set(items.map((item) => item.y))].sort((a, b) => b - a);
+    for (const row of rows) {
+      for (const side of ["left", "right"] as const) {
+        const values = pdfRow(items, row, side);
+        const date = parseDate(values.date);
+        const amount = parseAmount(values.amount);
+        if (!date || !Number.isFinite(amount) || amount <= 0) continue;
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        sales.push({
+          row: pageNumber * 10_000 + row,
+          date: `${year}-${month}-${day}`,
+          manager: values.manager,
+          collaborator: values.collaborator,
+          amount: Math.round(amount * 100) / 100,
+          half: date.getDate() <= 14 ? "quinzena1" : "quinzena2",
+        });
+      }
+    }
+  }
+  if (!sales.length) throw new Error("Não encontrei Data, Consultor e Valor nas tabelas do PDF.");
+  return sales;
+}
+
+export async function readSalesFile(file: File) {
+  return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")
+    ? readSalesPdf(file)
+    : readSalesSpreadsheet(file);
 }
 
 export const comparableName = normalize;

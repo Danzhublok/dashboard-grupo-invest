@@ -23,7 +23,7 @@ import {
   quinzena1Rep,
   quinzena2Rep,
 } from "@/lib/reps";
-import { comparableName, readSalesSpreadsheet, type ImportedSale } from "@/lib/spreadsheet-import";
+import { comparableName, readSalesFile, type ImportedSale } from "@/lib/spreadsheet-import";
 
 type PreviewSale = ImportedSale & { representationId: string; collaboratorId: string };
 
@@ -110,7 +110,7 @@ function VendasPage() {
   const onFile = async (file?: File) => {
     if (!file) return;
     try {
-      const rows = await readSalesSpreadsheet(file);
+      const rows = await readSalesFile(file);
       const matched = rows.map((row) => {
         let candidates = dados.representacoes.flatMap((rep) =>
           rep.colaboradores
@@ -144,18 +144,16 @@ function VendasPage() {
   };
 
   const importMonth = preview[0]?.date.slice(0, 7) ?? "";
-  const importHalf = preview[0]?.half;
+  const importHalves = [...new Set(preview.map((row) => row.half))];
   const inconsistent = preview.some(
-    (row) => !row.collaboratorId || row.date.slice(0, 7) !== importMonth || row.half !== importHalf,
+    (row) => !row.collaboratorId || row.date.slice(0, 7) !== importMonth,
   );
   const importTotal = preview.reduce((sum, row) => sum + row.amount, 0);
 
   const confirmImport = async () => {
-    if (!importMonth || !importHalf || inconsistent) return;
+    if (!importMonth || inconsistent) return;
     setImporting(true);
     const ok = await importarVendas({
-      month: importMonth,
-      half: importHalf,
       sales: preview.map((row) => ({
         row: row.row,
         date: row.date,
@@ -186,7 +184,7 @@ function VendasPage() {
               ref={fileInput}
               type="file"
               className="hidden"
-              accept=".xlsx,.xls,.csv"
+              accept=".xlsx,.xls,.csv,.pdf,application/pdf"
               onChange={(event) => void onFile(event.target.files?.[0])}
             />
             <Button variant="outline" onClick={() => fileInput.current?.click()} className="gap-2">
@@ -409,7 +407,11 @@ function VendasPage() {
                   <p className="text-xs text-muted-foreground">Período detectado</p>
                   <p className="font-semibold">
                     {importMonth || "-"} ·{" "}
-                    {importHalf === "quinzena1" ? "1ª quinzena" : "2ª quinzena"}
+                    {importHalves.length > 1
+                      ? "1ª e 2ª quinzenas"
+                      : importHalves[0] === "quinzena1"
+                        ? "1ª quinzena"
+                        : "2ª quinzena"}
                   </p>
                 </CardContent>
               </Card>
@@ -429,8 +431,8 @@ function VendasPage() {
             {inconsistent && (
               <div className="flex gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
                 <AlertTriangle className="mt-0.5 size-4 shrink-0" /> Corrija os consultores não
-                reconhecidos. Uma planilha também deve conter apenas um mês e uma quinzena por
-                importação.
+                reconhecidos e as datas divergentes. Cada arquivo deve conter somente um mês; ele
+                pode incluir as duas quinzenas.
               </div>
             )}
             <div className="overflow-x-auto rounded-lg border">
@@ -447,7 +449,26 @@ function VendasPage() {
                   {preview.map((row, index) => (
                     <tr key={`${row.row}-${index}`} className="border-t">
                       <td className="p-3 whitespace-nowrap">
-                        {row.date.split("-").reverse().join("/")}
+                        <input
+                          type="date"
+                          className="h-9 rounded-md border bg-background px-2"
+                          value={row.date}
+                          onChange={(event) => {
+                            const date = event.target.value;
+                            const day = Number(date.slice(8, 10));
+                            setPreview((current) =>
+                              current.map((item, itemIndex) =>
+                                itemIndex === index
+                                  ? {
+                                      ...item,
+                                      date,
+                                      half: day <= 14 ? "quinzena1" : "quinzena2",
+                                    }
+                                  : item,
+                              ),
+                            );
+                          }}
+                        />
                       </td>
                       <td className="p-3">{row.collaborator}</td>
                       <td className="p-3">
