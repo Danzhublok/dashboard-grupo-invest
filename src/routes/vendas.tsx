@@ -27,6 +27,33 @@ import { comparableName, readSalesFile, type ImportedSale } from "@/lib/spreadsh
 
 type PreviewSale = ImportedSale & { representationId: string; collaboratorId: string };
 
+function nameDistance(left: string, right: string) {
+  const rows = Array.from({ length: left.length + 1 }, (_, index) => index);
+  for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+    let previous = rows[0];
+    rows[0] = rightIndex;
+    for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+      const current = rows[leftIndex];
+      rows[leftIndex] = Math.min(
+        rows[leftIndex] + 1,
+        rows[leftIndex - 1] + 1,
+        previous + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1),
+      );
+      previous = current;
+    }
+  }
+  return rows[left.length];
+}
+
+const namesMatch = (systemName: string, importedName: string) => {
+  const system = comparableName(systemName);
+  const imported = comparableName(importedName);
+  if (!system || !imported) return false;
+  if (system === imported) return true;
+  if (imported.length >= 5 && system.startsWith(imported)) return true;
+  return nameDistance(system, imported) <= 2;
+};
+
 export const Route = createFileRoute("/vendas")({
   component: VendasPage,
 });
@@ -112,21 +139,18 @@ function VendasPage() {
     try {
       const rows = await readSalesFile(file);
       const matched = rows.map((row) => {
-        let candidates = dados.representacoes.flatMap((rep) =>
-          rep.colaboradores
-            .filter(
-              (collaborator) =>
-                comparableName(collaborator.nome) === comparableName(row.collaborator),
+        const manager = comparableName(row.manager);
+        const managerReps = manager
+          ? dados.representacoes.filter((rep) =>
+              [rep.nome, rep.representante].some((name) => comparableName(name) === manager),
             )
+          : [];
+        const scopedReps = managerReps.length ? managerReps : dados.representacoes;
+        const candidates = scopedReps.flatMap((rep) =>
+          rep.colaboradores
+            .filter((collaborator) => namesMatch(collaborator.nome, row.collaborator))
             .map((collaborator) => ({ rep, collaborator })),
         );
-        if (candidates.length > 1 && row.manager) {
-          const manager = comparableName(row.manager);
-          const narrowed = candidates.filter(({ rep }) =>
-            [rep.nome, rep.representante].some((name) => comparableName(name) === manager),
-          );
-          if (narrowed.length) candidates = narrowed;
-        }
         const match = candidates.length === 1 ? candidates[0] : undefined;
         return {
           ...row,
@@ -145,13 +169,24 @@ function VendasPage() {
 
   const importMonth = preview[0]?.date.slice(0, 7) ?? "";
   const importHalves = [...new Set(preview.map((row) => row.half))];
-  const inconsistent = preview.some(
-    (row) => !row.collaboratorId || row.date.slice(0, 7) !== importMonth,
-  );
+  const unresolvedCount = preview.filter((row) => !row.collaboratorId).length;
+  const divergentDateCount = preview.filter((row) => row.date.slice(0, 7) !== importMonth).length;
+  const inconsistent = unresolvedCount > 0 || divergentDateCount > 0;
   const importTotal = preview.reduce((sum, row) => sum + row.amount, 0);
 
   const confirmImport = async () => {
-    if (!importMonth || inconsistent) return;
+    if (!importMonth) {
+      toast.error("Não foi possível identificar o mês do arquivo.");
+      return;
+    }
+    if (inconsistent) {
+      const pending = [
+        unresolvedCount ? `${unresolvedCount} consultor(es)` : "",
+        divergentDateCount ? `${divergentDateCount} data(s)` : "",
+      ].filter(Boolean);
+      toast.error(`Corrija antes de importar: ${pending.join(" e ")}.`);
+      return;
+    }
     setImporting(true);
     const ok = await importarVendas({
       sales: preview.map((row) => ({
@@ -435,6 +470,9 @@ function VendasPage() {
                 <AlertTriangle className="mt-0.5 size-4 shrink-0" /> Corrija os consultores não
                 reconhecidos e as datas divergentes. Cada arquivo deve conter somente um mês; ele
                 pode incluir as duas quinzenas.
+                <strong className="ml-1">
+                  Pendências: {unresolvedCount} consultor(es) e {divergentDateCount} data(s).
+                </strong>
               </div>
             )}
             <div className="overflow-x-auto rounded-lg border">
@@ -453,7 +491,7 @@ function VendasPage() {
                       <td className="p-3 whitespace-nowrap">
                         <input
                           type="date"
-                          className="h-9 rounded-md border bg-background px-2"
+                          className={`h-9 rounded-md border bg-background px-2 ${row.date.slice(0, 7) !== importMonth ? "border-destructive ring-1 ring-destructive" : ""}`}
                           value={row.date}
                           onChange={(event) => {
                             const date = event.target.value;
@@ -475,7 +513,7 @@ function VendasPage() {
                       <td className="p-3">{row.collaborator}</td>
                       <td className="p-3">
                         <select
-                          className="h-9 min-w-52 rounded-md border bg-background px-2"
+                          className={`h-9 min-w-52 rounded-md border bg-background px-2 ${!row.collaboratorId ? "border-destructive ring-1 ring-destructive" : ""}`}
                           value={row.collaboratorId}
                           onChange={(event) => {
                             const collaboratorId = event.target.value;
@@ -515,7 +553,7 @@ function VendasPage() {
               >
                 <RotateCcw className="size-4" /> Refazer
               </Button>
-              <Button disabled={inconsistent || importing} onClick={() => void confirmImport()}>
+              <Button disabled={importing} onClick={() => void confirmImport()}>
                 {importing ? "Importando..." : "Confirmar importação"}
               </Button>
             </DialogFooter>
