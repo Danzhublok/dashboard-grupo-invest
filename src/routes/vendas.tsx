@@ -32,7 +32,7 @@ export const Route = createFileRoute("/vendas")({
 });
 
 function VendasPage() {
-  const { dados, registrarVenda, importarVendas } = useStore();
+  const { dados, erro, registrarVenda, importarVendas } = useStore();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedRep, setSelectedRep] = useState<string>(dados.representacoes[0]?.id ?? "");
   const [selectedColaborador, setSelectedColaborador] = useState<string>("");
@@ -166,6 +166,8 @@ function VendasPage() {
     if (ok) {
       setImportOpen(false);
       toast.success("Planilha importada e totais recalculados.");
+    } else {
+      toast.error(erro || "Não foi possível atualizar os dados. Tente novamente.");
     }
   };
 

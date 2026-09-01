@@ -663,9 +663,129 @@ export function StoreProvider({
         const { error } = await supabase.rpc("replace_sales_import_batch", {
           imported_sales: sales,
         });
-        if (error) {
+        if (
+          error &&
+          !/replace_sales_import_batch|schema cache|could not find/i.test(error.message)
+        ) {
           setErro(error.message);
           return false;
+        }
+        if (error) {
+          const periods = [
+            ...new Map(
+              sales.map((sale) => {
+                const month = sale.date.slice(0, 7);
+                const half = Number(sale.date.slice(8, 10)) <= 14 ? "quinzena1" : "quinzena2";
+                return [`${month}-${half}`, { month, half }] as const;
+              }),
+            ).values(),
+          ];
+          const cancelledIds: string[] = [];
+          for (const period of periods) {
+            const startDay = period.half === "quinzena1" ? "01" : "15";
+            const endDay = period.half === "quinzena1" ? "15" : "32";
+            const start = `${period.month}-${startDay}T00:00:00-03:00`;
+            const monthDate = new Date(`${period.month}-01T12:00:00`);
+            const followingMonth = new Date(monthDate);
+            followingMonth.setMonth(followingMonth.getMonth() + 1);
+            const end =
+              endDay === "15"
+                ? `${period.month}-15T00:00:00-03:00`
+                : `${followingMonth.getFullYear()}-${String(followingMonth.getMonth() + 1).padStart(2, "0")}-01T00:00:00-03:00`;
+            const existing = await supabase
+              .from("sales")
+              .select("id")
+              .gte("sold_at", start)
+              .lt("sold_at", end)
+              .eq("half", period.half)
+              .eq("status", "ativa");
+            if (existing.error) {
+              setErro(existing.error.message);
+              return false;
+            }
+            const ids = (existing.data ?? []).map((sale) => sale.id);
+            if (ids.length) {
+              const cancelledAt = new Date().toISOString();
+              const cancellation = await supabase
+                .from("sales")
+                .update({
+                  status: "cancelada",
+                  cancellation_reason: "Substituída por nova importação",
+                  cancelled_at: cancelledAt,
+                })
+                .in("id", ids);
+              if (cancellation.error) {
+                setErro(cancellation.error.message);
+                return false;
+              }
+              cancelledIds.push(...ids);
+            }
+          }
+
+          const inserted = await supabase.from("sales").insert(
+            sales.map((sale) => ({
+              representation_id: sale.representationId,
+              collaborator_id: sale.collaboratorId,
+              amount: sale.amount,
+              half: Number(sale.date.slice(8, 10)) <= 14 ? "quinzena1" : "quinzena2",
+              sold_at: `${sale.date}T12:00:00-03:00`,
+              created_by: session?.userId ?? null,
+            })),
+          );
+          if (inserted.error) {
+            if (cancelledIds.length) {
+              await supabase
+                .from("sales")
+                .update({ status: "ativa", cancellation_reason: null, cancelled_at: null })
+                .in("id", cancelledIds);
+            }
+            setErro(inserted.error.message);
+            return false;
+          }
+
+          const months = [...new Set(sales.map((sale) => sale.date.slice(0, 7)))];
+          for (const month of months) {
+            const monthDate = new Date(`${month}-01T12:00:00`);
+            monthDate.setMonth(monthDate.getMonth() + 1);
+            const nextMonth = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, "0")}-01`;
+            const activeSales = await supabase
+              .from("sales")
+              .select("collaborator_id, amount, half")
+              .gte("sold_at", `${month}-01T00:00:00-03:00`)
+              .lt("sold_at", `${nextMonth}T00:00:00-03:00`)
+              .eq("status", "ativa");
+            if (activeSales.error) {
+              setErro(activeSales.error.message);
+              return false;
+            }
+            const totals = new Map<string, { first: number; second: number; quotas: number }>();
+            for (const sale of activeSales.data ?? []) {
+              const total = totals.get(sale.collaborator_id) ?? { first: 0, second: 0, quotas: 0 };
+              if (sale.half === "quinzena1") total.first += Number(sale.amount);
+              else total.second += Number(sale.amount);
+              total.quotas += 1;
+              totals.set(sale.collaborator_id, total);
+            }
+            const results = dadosVisiveis.representacoes.flatMap((rep) =>
+              rep.colaboradores.map((collaborator) => {
+                const total = totals.get(collaborator.id) ?? { first: 0, second: 0, quotas: 0 };
+                return {
+                  collaborator_id: collaborator.id,
+                  month: `${month}-01`,
+                  first_half: total.first,
+                  second_half: total.second,
+                  quotas: total.quotas,
+                };
+              }),
+            );
+            const recalculated = await supabase
+              .from("collaborator_results")
+              .upsert(results, { onConflict: "collaborator_id,month" });
+            if (recalculated.error) {
+              setErro(recalculated.error.message);
+              return false;
+            }
+          }
         }
         setErro(null);
         const month = sales[0]?.date.slice(0, 7);
