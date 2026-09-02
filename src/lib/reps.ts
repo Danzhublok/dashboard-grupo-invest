@@ -41,6 +41,24 @@ export const vendaSubstituidaPorImportacao = (venda: Venda) => {
 
 export const deduplicarCancelamentosImportados = (vendas: Venda[]) => {
   const encontrados = new Set<string>();
+  const importados = vendas.filter((venda) => {
+    const motivo = (venda.motivoCancelamento ?? "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+    return venda.status === "cancelada" && motivo.includes("marcada em vermelho");
+  });
+  const importacaoMaisRecentePorPeriodo = new Map<string, number>();
+
+  for (const venda of importados) {
+    const periodo = `${venda.data.slice(0, 7)}|${venda.quinzena}`;
+    const canceladaEm = Date.parse(venda.canceladaEm ?? "");
+    if (!Number.isFinite(canceladaEm)) continue;
+    importacaoMaisRecentePorPeriodo.set(
+      periodo,
+      Math.max(importacaoMaisRecentePorPeriodo.get(periodo) ?? 0, canceladaEm),
+    );
+  }
 
   return [...vendas]
     .sort((a, b) => (b.canceladaEm ?? b.data).localeCompare(a.canceladaEm ?? a.data))
@@ -51,6 +69,17 @@ export const deduplicarCancelamentosImportados = (vendas: Venda[]) => {
         .toLowerCase();
 
       if (venda.status !== "cancelada" || !motivo.includes("marcada em vermelho")) return true;
+
+      const periodo = `${venda.data.slice(0, 7)}|${venda.quinzena}`;
+      const importacaoMaisRecente = importacaoMaisRecentePorPeriodo.get(periodo);
+      const canceladaEm = Date.parse(venda.canceladaEm ?? "");
+      if (
+        importacaoMaisRecente &&
+        Number.isFinite(canceladaEm) &&
+        importacaoMaisRecente - canceladaEm > 60_000
+      ) {
+        return false;
+      }
 
       const chave = [
         venda.representationId,
