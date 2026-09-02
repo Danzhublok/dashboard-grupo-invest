@@ -25,6 +25,7 @@ import { useAuth } from "@/lib/auth";
 import {
   brl,
   cotasRep,
+  deduplicarCancelamentosImportados,
   lucroColaborador,
   lucroColaboradorPorPeriodo,
   lucroMensal,
@@ -107,12 +108,14 @@ function Dashboard() {
   const totalSaidasAnterior = saidasAnterior.reduce((sum, saida) => sum + saida.valor, 0);
   const cotasTotais = somaCotas(representacoes);
   const ticketMedio = cotasTotais ? Math.round(ganhoLiquidoVendas / cotasTotais) : 0;
-  const vendasCanceladas = dados.vendas.filter(
-    (venda) =>
-      venda.status === "cancelada" &&
-      !vendaSubstituidaPorImportacao(venda) &&
-      venda.data.startsWith(mesSelecionado) &&
-      (periodoSelecionado === "geral" || venda.quinzena === periodoSelecionado),
+  const vendasCanceladas = deduplicarCancelamentosImportados(
+    dados.vendas.filter(
+      (venda) =>
+        venda.status === "cancelada" &&
+        !vendaSubstituidaPorImportacao(venda) &&
+        venda.data.startsWith(mesSelecionado) &&
+        (periodoSelecionado === "geral" || venda.quinzena === periodoSelecionado),
+    ),
   );
   const valorCancelado = vendasCanceladas.reduce(
     (total, venda) => total + Number(venda.valor || 0),

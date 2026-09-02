@@ -13,7 +13,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { brl, type Venda, vendaSubstituidaPorImportacao } from "@/lib/reps";
+import {
+  brl,
+  deduplicarCancelamentosImportados,
+  type Venda,
+  vendaSubstituidaPorImportacao,
+} from "@/lib/reps";
 import { useStore } from "@/lib/store";
 
 export const Route = createFileRoute("/cancelamentos")({ component: CancelamentosPage });
@@ -36,9 +41,11 @@ function CancelamentosPage() {
   );
   const vendasCanceladas = useMemo(
     () =>
-      dados.vendas
-        .filter((venda) => venda.status === "cancelada" && !vendaSubstituidaPorImportacao(venda))
-        .sort((a, b) => (b.canceladaEm ?? b.data).localeCompare(a.canceladaEm ?? a.data)),
+      deduplicarCancelamentosImportados(
+        dados.vendas.filter(
+          (venda) => venda.status === "cancelada" && !vendaSubstituidaPorImportacao(venda),
+        ),
+      ),
     [dados.vendas],
   );
   const colaboradores = useMemo(

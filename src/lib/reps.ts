@@ -39,6 +39,32 @@ export const vendaSubstituidaPorImportacao = (venda: Venda) => {
   );
 };
 
+export const deduplicarCancelamentosImportados = (vendas: Venda[]) => {
+  const encontrados = new Set<string>();
+
+  return [...vendas]
+    .sort((a, b) => (b.canceladaEm ?? b.data).localeCompare(a.canceladaEm ?? a.data))
+    .filter((venda) => {
+      const motivo = (venda.motivoCancelamento ?? "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+
+      if (venda.status !== "cancelada" || !motivo.includes("marcada em vermelho")) return true;
+
+      const chave = [
+        venda.representationId,
+        venda.collaboratorId,
+        venda.data.slice(0, 10),
+        Number(venda.valor).toFixed(2),
+      ].join("|");
+
+      if (encontrados.has(chave)) return false;
+      encontrados.add(chave);
+      return true;
+    });
+};
+
 export type Representacao = {
   id: string;
   nome: string;
