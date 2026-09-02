@@ -33,6 +33,7 @@ import {
   quinzena2Rep,
   somaCotas,
   somaLucroPorPeriodo,
+  vendaSubstituidaPorImportacao,
   type DashboardPeriod,
 } from "@/lib/reps";
 
@@ -109,6 +110,7 @@ function Dashboard() {
   const vendasCanceladas = dados.vendas.filter(
     (venda) =>
       venda.status === "cancelada" &&
+      !vendaSubstituidaPorImportacao(venda) &&
       venda.data.startsWith(mesSelecionado) &&
       (periodoSelecionado === "geral" || venda.quinzena === periodoSelecionado),
   );

@@ -27,6 +27,10 @@ export type Venda = {
   canceladaEm?: string;
 };
 
+export const vendaSubstituidaPorImportacao = (venda: Venda) =>
+  venda.status === "cancelada" &&
+  venda.motivoCancelamento?.startsWith("Substituída por nova importação") === true;
+
 export type Representacao = {
   id: string;
   nome: string;
@@ -66,10 +70,7 @@ export type DashboardPeriod = "geral" | "quinzena1" | "quinzena2";
 
 export const lucroColaborador = (c: Colaborador) =>
   Number(c.quinzena1 || 0) + Number(c.quinzena2 || 0);
-export const lucroColaboradorPorPeriodo = (
-  c: Colaborador,
-  periodo: DashboardPeriod = "geral",
-) => {
+export const lucroColaboradorPorPeriodo = (c: Colaborador, periodo: DashboardPeriod = "geral") => {
   if (periodo === "quinzena1") {
     return Number(c.quinzena1 || 0);
   }
@@ -104,10 +105,8 @@ export const cotasRep = (r: Representacao) =>
   r.colaboradores.reduce((s, x) => s + Number(x.cotas || 0), 0);
 
 export const somaLucro = (reps: Representacao[]) => reps.reduce((s, r) => s + lucroMensal(r), 0);
-export const somaLucroPorPeriodo = (
-  reps: Representacao[],
-  periodo: DashboardPeriod = "geral",
-) => reps.reduce((s, r) => s + lucroRepresentacaoPorPeriodo(r, periodo), 0);
+export const somaLucroPorPeriodo = (reps: Representacao[], periodo: DashboardPeriod = "geral") =>
+  reps.reduce((s, r) => s + lucroRepresentacaoPorPeriodo(r, periodo), 0);
 export const somaCotas = (reps: Representacao[]) => reps.reduce((s, r) => s + cotasRep(r), 0);
 
 export const brl = (v: number) =>
