@@ -172,6 +172,7 @@ function VendasPage() {
   const unresolvedCount = preview.filter((row) => !row.collaboratorId).length;
   const divergentDateCount = preview.filter((row) => row.date.slice(0, 7) !== importMonth).length;
   const inconsistent = unresolvedCount > 0 || divergentDateCount > 0;
+  const importGross = preview.reduce((sum, row) => sum + row.amount, 0);
   const importTotal = preview.reduce(
     (sum, row) => sum + (row.status === "ativa" ? row.amount : 0),
     0,
@@ -443,7 +444,7 @@ function VendasPage() {
                 quinzena; use Refazer para escolher outra planilha.
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Card>
                 <CardContent className="pt-4">
                   <p className="text-xs text-muted-foreground">Período detectado</p>
@@ -465,7 +466,14 @@ function VendasPage() {
               </Card>
               <Card>
                 <CardContent className="pt-4">
-                  <p className="text-xs text-muted-foreground">Total ativo</p>
+                  <p className="text-xs text-muted-foreground">Valor bruto</p>
+                  <p className="font-semibold">{brl(importGross)}</p>
+                  <p className="text-xs text-muted-foreground">Inclui canceladas</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-4">
+                  <p className="text-xs text-muted-foreground">Valor total</p>
                   <p className="font-semibold">{brl(importTotal)}</p>
                   <p className="text-xs text-muted-foreground">{cancelledCount} cancelada(s)</p>
                 </CardContent>
