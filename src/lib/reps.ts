@@ -54,7 +54,6 @@ export const deduplicarCancelamentosImportados = (vendas: Venda[]) => {
 
       const chave = [
         venda.representationId,
-        venda.collaboratorId,
         venda.data.slice(0, 10),
         Number(venda.valor).toFixed(2),
       ].join("|");
