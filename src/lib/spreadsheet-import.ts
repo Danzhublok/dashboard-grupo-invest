@@ -198,8 +198,8 @@ async function readSalesPdf(file: File): Promise<ImportedSale[]> {
         y: Math.round(item.transform[5]),
       }));
     const rows = [...new Set(items.map((item) => item.y))].sort((a, b) => b - a);
-    for (const row of rows) {
-      for (const side of ["left", "right"] as const) {
+    for (const side of ["left", "right"] as const) {
+      for (const row of rows) {
         const values = pdfRow(items, row, side);
         const date = parseDate(values.date);
         const amount = parseAmount(values.amount);

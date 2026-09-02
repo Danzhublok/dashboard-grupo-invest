@@ -138,28 +138,26 @@ function VendasPage() {
     if (!file) return;
     try {
       const rows = await readSalesFile(file);
-      const matched = rows
-        .map((row) => {
-          const manager = comparableName(row.manager);
-          const managerReps = manager
-            ? dados.representacoes.filter((rep) =>
-                [rep.nome, rep.representante].some((name) => comparableName(name) === manager),
-              )
-            : [];
-          const scopedReps = managerReps.length ? managerReps : dados.representacoes;
-          const candidates = scopedReps.flatMap((rep) =>
-            rep.colaboradores
-              .filter((collaborator) => namesMatch(collaborator.nome, row.collaborator))
-              .map((collaborator) => ({ rep, collaborator })),
-          );
-          const match = candidates.length === 1 ? candidates[0] : undefined;
-          return {
-            ...row,
-            representationId: match?.rep.id ?? "",
-            collaboratorId: match?.collaborator.id ?? "",
-          };
-        })
-        .sort((left, right) => left.date.localeCompare(right.date) || left.row - right.row);
+      const matched = rows.map((row) => {
+        const manager = comparableName(row.manager);
+        const managerReps = manager
+          ? dados.representacoes.filter((rep) =>
+              [rep.nome, rep.representante].some((name) => comparableName(name) === manager),
+            )
+          : [];
+        const scopedReps = managerReps.length ? managerReps : dados.representacoes;
+        const candidates = scopedReps.flatMap((rep) =>
+          rep.colaboradores
+            .filter((collaborator) => namesMatch(collaborator.nome, row.collaborator))
+            .map((collaborator) => ({ rep, collaborator })),
+        );
+        const match = candidates.length === 1 ? candidates[0] : undefined;
+        return {
+          ...row,
+          representationId: match?.rep.id ?? "",
+          collaboratorId: match?.collaborator.id ?? "",
+        };
+      });
       setPreview(matched);
       setImportOpen(true);
     } catch (error) {
