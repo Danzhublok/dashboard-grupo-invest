@@ -27,9 +27,17 @@ export type Venda = {
   canceladaEm?: string;
 };
 
-export const vendaSubstituidaPorImportacao = (venda: Venda) =>
-  venda.status === "cancelada" &&
-  venda.motivoCancelamento?.startsWith("Substituída por nova importação") === true;
+export const vendaSubstituidaPorImportacao = (venda: Venda) => {
+  const motivo = (venda.motivoCancelamento ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  return (
+    venda.status === "cancelada" &&
+    motivo.includes("importa") &&
+    (motivo.includes("substitu") || motivo.includes("reimport"))
+  );
+};
 
 export type Representacao = {
   id: string;
