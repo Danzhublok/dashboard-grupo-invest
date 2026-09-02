@@ -138,26 +138,28 @@ function VendasPage() {
     if (!file) return;
     try {
       const rows = await readSalesFile(file);
-      const matched = rows.map((row) => {
-        const manager = comparableName(row.manager);
-        const managerReps = manager
-          ? dados.representacoes.filter((rep) =>
-              [rep.nome, rep.representante].some((name) => comparableName(name) === manager),
-            )
-          : [];
-        const scopedReps = managerReps.length ? managerReps : dados.representacoes;
-        const candidates = scopedReps.flatMap((rep) =>
-          rep.colaboradores
-            .filter((collaborator) => namesMatch(collaborator.nome, row.collaborator))
-            .map((collaborator) => ({ rep, collaborator })),
-        );
-        const match = candidates.length === 1 ? candidates[0] : undefined;
-        return {
-          ...row,
-          representationId: match?.rep.id ?? "",
-          collaboratorId: match?.collaborator.id ?? "",
-        };
-      });
+      const matched = rows
+        .map((row) => {
+          const manager = comparableName(row.manager);
+          const managerReps = manager
+            ? dados.representacoes.filter((rep) =>
+                [rep.nome, rep.representante].some((name) => comparableName(name) === manager),
+              )
+            : [];
+          const scopedReps = managerReps.length ? managerReps : dados.representacoes;
+          const candidates = scopedReps.flatMap((rep) =>
+            rep.colaboradores
+              .filter((collaborator) => namesMatch(collaborator.nome, row.collaborator))
+              .map((collaborator) => ({ rep, collaborator })),
+          );
+          const match = candidates.length === 1 ? candidates[0] : undefined;
+          return {
+            ...row,
+            representationId: match?.rep.id ?? "",
+            collaboratorId: match?.collaborator.id ?? "",
+          };
+        })
+        .sort((left, right) => left.date.localeCompare(right.date) || left.row - right.row);
       setPreview(matched);
       setImportOpen(true);
     } catch (error) {
@@ -167,7 +169,12 @@ function VendasPage() {
     }
   };
 
-  const importMonth = preview[0]?.date.slice(0, 7) ?? "";
+  const importMonth =
+    [...new Set(preview.map((row) => row.date.slice(0, 7)))].sort(
+      (left, right) =>
+        preview.filter((row) => row.date.startsWith(right)).length -
+        preview.filter((row) => row.date.startsWith(left)).length,
+    )[0] ?? "";
   const importHalves = [...new Set(preview.map((row) => row.half))];
   const unresolvedCount = preview.filter((row) => !row.collaboratorId).length;
   const divergentDateCount = preview.filter((row) => row.date.slice(0, 7) !== importMonth).length;
