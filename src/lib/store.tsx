@@ -682,6 +682,11 @@ export function StoreProvider({
             ).values(),
           ];
           const cancelledIds: string[] = [];
+          const previousCancelled: Array<{
+            id: string;
+            cancellation_reason: string | null;
+            cancelled_at: string | null;
+          }> = [];
           for (const period of periods) {
             const startDay = period.half === "quinzena1" ? "01" : "15";
             const endDay = period.half === "quinzena1" ? "15" : "32";
@@ -695,16 +700,29 @@ export function StoreProvider({
                 : `${followingMonth.getFullYear()}-${String(followingMonth.getMonth() + 1).padStart(2, "0")}-01T00:00:00-03:00`;
             const existing = await supabase
               .from("sales")
-              .select("id")
+              .select("id, status, cancellation_reason, cancelled_at")
               .gte("sold_at", start)
               .lt("sold_at", end)
-              .eq("half", period.half)
-              .eq("status", "ativa");
+              .eq("half", period.half);
             if (existing.error) {
               setErro(existing.error.message);
               return false;
             }
             const ids = (existing.data ?? []).map((sale) => sale.id);
+            cancelledIds.push(
+              ...(existing.data ?? [])
+                .filter((sale) => sale.status === "ativa")
+                .map((sale) => sale.id),
+            );
+            previousCancelled.push(
+              ...(existing.data ?? [])
+                .filter((sale) => sale.status === "cancelada")
+                .map((sale) => ({
+                  id: sale.id,
+                  cancellation_reason: sale.cancellation_reason,
+                  cancelled_at: sale.cancelled_at,
+                })),
+            );
             if (ids.length) {
               const cancelledAt = new Date().toISOString();
               const cancellation = await supabase
@@ -719,7 +737,6 @@ export function StoreProvider({
                 setErro(cancellation.error.message);
                 return false;
               }
-              cancelledIds.push(...ids);
             }
           }
 
@@ -744,6 +761,18 @@ export function StoreProvider({
                 .update({ status: "ativa", cancellation_reason: null, cancelled_at: null })
                 .in("id", cancelledIds);
             }
+            await Promise.all(
+              previousCancelled.map((sale) =>
+                supabase
+                  .from("sales")
+                  .update({
+                    status: "cancelada",
+                    cancellation_reason: sale.cancellation_reason,
+                    cancelled_at: sale.cancelled_at,
+                  })
+                  .eq("id", sale.id),
+              ),
+            );
             setErro(inserted.error.message);
             return false;
           }
