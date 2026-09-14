@@ -67,6 +67,8 @@ function VendasPage() {
   const [quinzena, setQuinzena] = useState<"quinzena1" | "quinzena2">("quinzena1");
   const [importOpen, setImportOpen] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [readingFile, setReadingFile] = useState(false);
+  const [fileError, setFileError] = useState("");
   const [preview, setPreview] = useState<PreviewSale[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -136,8 +138,19 @@ function VendasPage() {
 
   const onFile = async (file?: File) => {
     if (!file) return;
+    setReadingFile(true);
+    setFileError("");
+    let readingTimeout: ReturnType<typeof setTimeout> | undefined;
     try {
-      const rows = await readSalesFile(file);
+      const rows = await Promise.race([
+        readSalesFile(file),
+        new Promise<never>((_, reject) => {
+          readingTimeout = setTimeout(
+            () => reject(new Error("A leitura do arquivo demorou demais. Tente novamente.")),
+            30000,
+          );
+        }),
+      ]);
       const matched = rows.map((row) => {
         const manager = comparableName(row.manager);
         const managerReps = manager
@@ -161,8 +174,12 @@ function VendasPage() {
       setPreview(matched);
       setImportOpen(true);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível ler a planilha.");
+      const message = error instanceof Error ? error.message : "Não foi possível ler a planilha.";
+      setFileError(message);
+      toast.error(message);
     } finally {
+      clearTimeout(readingTimeout);
+      setReadingFile(false);
       if (fileInput.current) fileInput.current.value = "";
     }
   };
@@ -233,14 +250,25 @@ function VendasPage() {
               accept=".xlsx,.xls,.csv,.pdf,application/pdf"
               onChange={(event) => void onFile(event.target.files?.[0])}
             />
-            <Button variant="outline" onClick={() => fileInput.current?.click()} className="gap-2">
-              <Upload className="size-4" /> Importar planilha
+            <Button
+              variant="outline"
+              onClick={() => fileInput.current?.click()}
+              className="gap-2"
+              disabled={readingFile}
+            >
+              <Upload className="size-4" /> {readingFile ? "Lendo arquivo..." : "Importar planilha"}
             </Button>
             <Button onClick={onAbrirModal} className="gap-2">
               <Plus className="size-4" /> Registrar venda
             </Button>
           </div>
         </section>
+
+        {fileError && (
+          <p role="alert" className="text-sm text-destructive">
+            {fileError}
+          </p>
+        )}
 
         <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           {dados.representacoes.length === 0 ? (

@@ -1,6 +1,12 @@
 import * as XLSX from "xlsx";
-import { getDocument, GlobalWorkerOptions, OPS, Util, type PDFPageProxy } from "pdfjs-dist";
-import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import {
+  getDocument,
+  GlobalWorkerOptions,
+  OPS,
+  Util,
+  type PDFPageProxy,
+} from "pdfjs-dist/legacy/build/pdf.mjs";
+import pdfWorker from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
 GlobalWorkerOptions.workerSrc = pdfWorker;
 

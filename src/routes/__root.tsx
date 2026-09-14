@@ -15,6 +15,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { StoreProvider } from "../lib/store";
 import { AuthProvider, useAuth } from "../lib/auth";
 import logo from "@/assets/grupo-invest-logo.jpg?url";
+import { Toaster } from "@/components/ui/sonner";
 
 function NotFoundComponent() {
   return (
@@ -136,6 +137,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <AuthenticatedApp />
+        <Toaster richColors position="top-right" />
       </AuthProvider>
     </QueryClientProvider>
   );
