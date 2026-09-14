@@ -1,12 +1,5 @@
 import * as XLSX from "xlsx";
-import {
-  getDocument,
-  GlobalWorkerOptions,
-  OPS,
-  Util,
-  type PDFPageProxy,
-  type TextItem,
-} from "pdfjs-dist";
+import { getDocument, GlobalWorkerOptions, OPS, Util, type PDFPageProxy } from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -174,8 +167,7 @@ async function redPdfRegions(page: PDFPageProxy): Promise<PdfRegion[]> {
   return regions;
 }
 
-const isInRedRegion = (regions: PdfRegion[], y: number, side: "left" | "right") => {
-  const centerX = side === "left" ? 240 : 620;
+const isInRedRegion = (regions: PdfRegion[], y: number, centerX: number) => {
   return regions.some(
     (region) =>
       centerX >= region.minX &&
@@ -184,6 +176,69 @@ const isInRedRegion = (regions: PdfRegion[], y: number, side: "left" | "right") 
       y <= region.maxY + 1,
   );
 };
+
+function singleTablePdfRows(items: PositionedText[], regions: PdfRegion[], pageNumber: number) {
+  const header = [...new Set(items.map((item) => item.y))]
+    .sort((a, b) => b - a)
+    .find((y) => {
+      const labels = items.filter((item) => item.y === y).map((item) => normalize(item.text));
+      return [
+        "data",
+        "gerente",
+        "consultor",
+        "consorciado",
+        "clientepagante",
+        "valordocredito",
+        "valordeentrada",
+      ].every((label) => labels.includes(label));
+    });
+  if (header === undefined) return null;
+
+  const heading = items.filter((item) => item.y === header);
+  const xOf = (label: string) => heading.find((item) => normalize(item.text) === label)!.x;
+  const dateX = xOf("data");
+  const managerX = xOf("gerente");
+  const collaboratorX = xOf("consultor");
+  const customerX = xOf("consorciado");
+  const payerX = xOf("clientepagante");
+  const amountX = xOf("valordocredito");
+  const entryX = xOf("valordeentrada");
+  const boundary = (left: number, right: number) => (left + right) / 2;
+  const columns = {
+    date: [-Infinity, boundary(dateX, managerX)],
+    manager: [boundary(dateX, managerX), boundary(managerX, collaboratorX)],
+    collaborator: [boundary(managerX, collaboratorX), boundary(collaboratorX, customerX)],
+    amount: [boundary(payerX, amountX), boundary(amountX, entryX)],
+  };
+  const valueAt = (row: number, [from, to]: number[]) =>
+    items
+      .filter((item) => item.y === row && item.x >= from && item.x < to && item.text.trim())
+      .sort((a, b) => a.x - b.x)
+      .map((item) => item.text.trim())
+      .join(" ");
+
+  return [...new Set(items.filter((item) => item.y < header).map((item) => item.y))]
+    .sort((a, b) => b - a)
+    .flatMap((row) => {
+      const date = parseDate(valueAt(row, columns.date));
+      const amount = parseAmount(valueAt(row, columns.amount));
+      const collaborator = valueAt(row, columns.collaborator);
+      if (!date || !collaborator || !Number.isFinite(amount) || amount <= 0) return [];
+      return [
+        {
+          row: pageNumber * 10_000 + row,
+          date: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`,
+          manager: valueAt(row, columns.manager),
+          collaborator,
+          amount: Math.round(amount * 100) / 100,
+          half: date.getDate() <= 14 ? ("quinzena1" as const) : ("quinzena2" as const),
+          status: isInRedRegion(regions, row, collaboratorX)
+            ? ("cancelada" as const)
+            : ("ativa" as const),
+        },
+      ];
+    });
+}
 
 function pdfRow(items: PositionedText[], row: number, side: "left" | "right") {
   const columns =
@@ -213,12 +268,17 @@ async function readSalesPdf(file: File): Promise<ImportedSale[]> {
     const redRegions = await redPdfRegions(page);
     const content = await page.getTextContent();
     const items: PositionedText[] = content.items
-      .filter((item): item is TextItem => "str" in item)
+      .filter((item): item is Extract<typeof item, { str: string }> => "str" in item)
       .map((item) => ({
         text: item.str,
         x: Math.round(item.transform[4]),
         y: Math.round(item.transform[5]),
       }));
+    const singleTableSales = singleTablePdfRows(items, redRegions, pageNumber);
+    if (singleTableSales) {
+      sales.push(...singleTableSales);
+      continue;
+    }
     const rows = [...new Set(items.map((item) => item.y))].sort((a, b) => b - a);
     for (const side of ["left", "right"] as const) {
       for (const row of rows) {
@@ -236,7 +296,9 @@ async function readSalesPdf(file: File): Promise<ImportedSale[]> {
           collaborator: values.collaborator,
           amount: Math.round(amount * 100) / 100,
           half: date.getDate() <= 14 ? "quinzena1" : "quinzena2",
-          status: isInRedRegion(redRegions, row, side) ? "cancelada" : "ativa",
+          status: isInRedRegion(redRegions, row, side === "left" ? 240 : 620)
+            ? "cancelada"
+            : "ativa",
         });
       }
     }

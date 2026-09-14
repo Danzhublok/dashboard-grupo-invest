@@ -174,15 +174,16 @@ function VendasPage() {
         preview.filter((row) => row.date.startsWith(left)).length,
     )[0] ?? "";
   const importHalves = [...new Set(preview.map((row) => row.half))];
-  const unresolvedCount = preview.filter((row) => !row.collaboratorId).length;
-  const divergentDateCount = preview.filter((row) => row.date.slice(0, 7) !== importMonth).length;
-  const inconsistent = unresolvedCount > 0 || divergentDateCount > 0;
-  const importGross = preview.reduce((sum, row) => sum + row.amount, 0);
-  const importTotal = preview.reduce(
+  const selectedSales = preview.filter((row) => row.date.slice(0, 7) === importMonth);
+  const unresolvedCount = selectedSales.filter((row) => !row.collaboratorId).length;
+  const divergentDateCount = preview.length - selectedSales.length;
+  const inconsistent = unresolvedCount > 0;
+  const importGross = selectedSales.reduce((sum, row) => sum + row.amount, 0);
+  const importTotal = selectedSales.reduce(
     (sum, row) => sum + (row.status === "ativa" ? row.amount : 0),
     0,
   );
-  const cancelledCount = preview.filter((row) => row.status === "cancelada").length;
+  const cancelledCount = selectedSales.filter((row) => row.status === "cancelada").length;
 
   const confirmImport = async () => {
     if (!importMonth) {
@@ -190,16 +191,13 @@ function VendasPage() {
       return;
     }
     if (inconsistent) {
-      const pending = [
-        unresolvedCount ? `${unresolvedCount} consultor(es)` : "",
-        divergentDateCount ? `${divergentDateCount} data(s)` : "",
-      ].filter(Boolean);
+      const pending = [`${unresolvedCount} consultor(es)`];
       toast.error(`Corrija antes de importar: ${pending.join(" e ")}.`);
       return;
     }
     setImporting(true);
     const ok = await importarVendas({
-      sales: preview.map((row) => ({
+      sales: selectedSales.map((row) => ({
         row: row.row,
         date: row.date,
         representationId: row.representationId,
@@ -466,7 +464,7 @@ function VendasPage() {
               <Card>
                 <CardContent className="pt-4">
                   <p className="text-xs text-muted-foreground">Contratos</p>
-                  <p className="font-semibold">{preview.length}</p>
+                  <p className="font-semibold">{selectedSales.length}</p>
                 </CardContent>
               </Card>
               <Card>
@@ -484,14 +482,17 @@ function VendasPage() {
                 </CardContent>
               </Card>
             </div>
+            {divergentDateCount > 0 && (
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                {divergentDateCount} contrato(s) de outro mês serão ignorados nesta importação. As
+                datas originais permanecem na prévia para conferência.
+              </div>
+            )}
             {inconsistent && (
               <div className="flex gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
                 <AlertTriangle className="mt-0.5 size-4 shrink-0" /> Corrija os consultores não
-                reconhecidos e as datas divergentes. Cada arquivo deve conter somente um mês; ele
-                pode incluir as duas quinzenas.
-                <strong className="ml-1">
-                  Pendências: {unresolvedCount} consultor(es) e {divergentDateCount} data(s).
-                </strong>
+                reconhecidos antes de importar.
+                <strong className="ml-1">Pendências: {unresolvedCount} consultor(es).</strong>
               </div>
             )}
             <div className="overflow-x-auto rounded-lg border">
