@@ -23,36 +23,14 @@ import {
   quinzena1Rep,
   quinzena2Rep,
 } from "@/lib/reps";
-import { comparableName, readSalesFile, type ImportedSale } from "@/lib/spreadsheet-import";
+import {
+  comparableName,
+  importedNameMatches,
+  readSalesFile,
+  type ImportedSale,
+} from "@/lib/spreadsheet-import";
 
 type PreviewSale = ImportedSale & { representationId: string; collaboratorId: string };
-
-function nameDistance(left: string, right: string) {
-  const rows = Array.from({ length: left.length + 1 }, (_, index) => index);
-  for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
-    let previous = rows[0];
-    rows[0] = rightIndex;
-    for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
-      const current = rows[leftIndex];
-      rows[leftIndex] = Math.min(
-        rows[leftIndex] + 1,
-        rows[leftIndex - 1] + 1,
-        previous + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1),
-      );
-      previous = current;
-    }
-  }
-  return rows[left.length];
-}
-
-const namesMatch = (systemName: string, importedName: string) => {
-  const system = comparableName(systemName);
-  const imported = comparableName(importedName);
-  if (!system || !imported) return false;
-  if (system === imported) return true;
-  if (imported.length >= 5 && system.startsWith(imported)) return true;
-  return nameDistance(system, imported) <= 2;
-};
 
 export const Route = createFileRoute("/vendas")({
   component: VendasPage,
@@ -161,7 +139,7 @@ function VendasPage() {
         const scopedReps = managerReps.length ? managerReps : dados.representacoes;
         const candidates = scopedReps.flatMap((rep) =>
           rep.colaboradores
-            .filter((collaborator) => namesMatch(collaborator.nome, row.collaborator))
+            .filter((collaborator) => importedNameMatches(collaborator.nome, row.collaborator))
             .map((collaborator) => ({ rep, collaborator })),
         );
         const match = candidates.length === 1 ? candidates[0] : undefined;

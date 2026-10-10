@@ -138,14 +138,17 @@ export async function readSalesSpreadsheet(file: File): Promise<ImportedSale[]> 
 
 type PositionedText = { text: string; x: number; y: number };
 
+type PdfVerticalLine = { x: number; minY: number; maxY: number };
+
 type PdfRegion = { minX: number; maxX: number; minY: number; maxY: number };
 
-async function redPdfRegions(page: PDFPageProxy): Promise<PdfRegion[]> {
+async function pdfTableGeometry(page: PDFPageProxy) {
   const operators = await page.getOperatorList();
   let transform = [1, 0, 0, 1, 0, 0];
   const transforms: number[][] = [];
   let fillColor = "";
   const regions: PdfRegion[] = [];
+  const verticalLines: PdfVerticalLine[] = [];
   const point = (x: number, y: number) => [
     transform[0] * x + transform[2] * y + transform[4],
     transform[1] * x + transform[3] * y + transform[5],
@@ -157,7 +160,40 @@ async function redPdfRegions(page: PDFPageProxy): Promise<PdfRegion[]> {
     else if (operator === OPS.restore) transform = transforms.pop() ?? transform;
     else if (operator === OPS.transform) transform = Util.transform(transform, args as number[]);
     else if (operator === OPS.setFillRGBColor) fillColor = String(args?.[0] ?? "").toLowerCase();
-    else if (operator === OPS.constructPath && fillColor === "#ff0000") {
+    else if (operator === OPS.constructPath) {
+      // PDF.js packs each path as move/line/curve commands followed by coordinates.
+      const paths = args?.[1] as ArrayLike<number>[] | undefined;
+      for (const path of paths ?? []) {
+        let previous: number[] | undefined;
+        for (let offset = 0; offset < path.length;) {
+          const command = path[offset++];
+          if (command === 4) {
+            previous = undefined;
+            continue;
+          }
+          if (command === 2) {
+            offset += 6;
+            previous = undefined;
+            continue;
+          }
+          if (command === 3) {
+            offset += 4;
+            previous = undefined;
+            continue;
+          }
+          if (command !== 0 && command !== 1) break;
+          const current = point(path[offset++], path[offset++]);
+          if (command === 1 && previous && Math.abs(current[0] - previous[0]) < 0.5) {
+            verticalLines.push({
+              x: current[0],
+              minY: Math.min(current[1], previous[1]),
+              maxY: Math.max(current[1], previous[1]),
+            });
+          }
+          previous = current;
+        }
+      }
+      if (fillColor !== "#ff0000") return;
       const bounds = args?.[2] as ArrayLike<number> | undefined;
       if (!bounds || bounds.length < 4) return;
       const first = point(bounds[0], bounds[1]);
@@ -170,7 +206,7 @@ async function redPdfRegions(page: PDFPageProxy): Promise<PdfRegion[]> {
       });
     }
   });
-  return regions;
+  return { redRegions: regions, verticalLines };
 }
 
 const isInRedRegion = (regions: PdfRegion[], y: number, centerX: number) => {
@@ -183,7 +219,12 @@ const isInRedRegion = (regions: PdfRegion[], y: number, centerX: number) => {
   );
 };
 
-function singleTablePdfRows(items: PositionedText[], regions: PdfRegion[], pageNumber: number) {
+function singleTablePdfRows(
+  items: PositionedText[],
+  regions: PdfRegion[],
+  verticalLines: PdfVerticalLine[],
+  pageNumber: number,
+) {
   const header = [...new Set(items.map((item) => item.y))]
     .sort((a, b) => b - a)
     .find((y) => {
@@ -210,11 +251,28 @@ function singleTablePdfRows(items: PositionedText[], regions: PdfRegion[], pageN
   const amountX = xOf("valordocredito");
   const entryX = xOf("valordeentrada");
   const boundary = (left: number, right: number) => (left + right) / 2;
+  // Titles can be centered in cells of very different widths. Use the drawn
+  // cell borders instead of the midpoint between title starting positions.
+  const edges = [
+    ...new Set(
+      verticalLines
+        .filter((line) => header >= line.minY - 1 && header <= line.maxY + 1)
+        .map((line) => line.x),
+    ),
+  ].sort((a, b) => a - b);
+  const columnAt = (x: number, fallback: number[]) => {
+    const from = edges.filter((edge) => edge < x).at(-1);
+    const to = edges.find((edge) => edge > x);
+    return from !== undefined && to !== undefined ? [from, to] : fallback;
+  };
   const columns = {
-    date: [-Infinity, boundary(dateX, managerX)],
-    manager: [boundary(dateX, managerX), boundary(managerX, collaboratorX)],
-    collaborator: [boundary(managerX, collaboratorX), boundary(collaboratorX, customerX)],
-    amount: [boundary(payerX, amountX), boundary(amountX, entryX)],
+    date: columnAt(dateX, [-Infinity, boundary(dateX, managerX)]),
+    manager: columnAt(managerX, [boundary(dateX, managerX), boundary(managerX, collaboratorX)]),
+    collaborator: columnAt(collaboratorX, [
+      boundary(managerX, collaboratorX),
+      boundary(collaboratorX, customerX),
+    ]),
+    amount: columnAt(amountX, [boundary(payerX, amountX), boundary(amountX, entryX)]),
   };
   const valueAt = (row: number, [from, to]: number[]) =>
     items
@@ -229,7 +287,7 @@ function singleTablePdfRows(items: PositionedText[], regions: PdfRegion[], pageN
       const date = parseDate(valueAt(row, columns.date));
       const amount = parseAmount(valueAt(row, columns.amount));
       const collaborator = valueAt(row, columns.collaborator);
-      if (!date || !collaborator || !Number.isFinite(amount) || amount <= 0) return [];
+      if (!date || !Number.isFinite(amount) || amount <= 0) return [];
       return [
         {
           row: pageNumber * 10_000 + row,
@@ -271,7 +329,7 @@ async function readSalesPdf(file: File): Promise<ImportedSale[]> {
   const sales: ImportedSale[] = [];
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber);
-    const redRegions = await redPdfRegions(page);
+    const { redRegions, verticalLines } = await pdfTableGeometry(page);
     const content = await page.getTextContent();
     const items: PositionedText[] = content.items
       .filter((item): item is Extract<typeof item, { str: string }> => "str" in item)
@@ -280,7 +338,7 @@ async function readSalesPdf(file: File): Promise<ImportedSale[]> {
         x: Math.round(item.transform[4]),
         y: Math.round(item.transform[5]),
       }));
-    const singleTableSales = singleTablePdfRows(items, redRegions, pageNumber);
+    const singleTableSales = singleTablePdfRows(items, redRegions, verticalLines, pageNumber);
     if (singleTableSales) {
       sales.push(...singleTableSales);
       continue;
@@ -320,3 +378,14 @@ export async function readSalesFile(file: File) {
 }
 
 export const comparableName = normalize;
+
+// Accept accents and abbreviated full names, but never guess a different person.
+export function importedNameMatches(systemName: string, importedName: string) {
+  const imported = comparableName(importedName);
+  if (!imported) return false;
+  if (comparableName(systemName) === imported) return true;
+  const importedWords = importedName.trim().split(/\s+/).length;
+  return (
+    comparableName(systemName.trim().split(/\s+/).slice(0, importedWords).join(" ")) === imported
+  );
+}
