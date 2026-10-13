@@ -68,7 +68,8 @@ export const deduplicarCancelamentosImportados = (vendas: Venda[]) => {
         .replace(/[\u0300-\u036f]/g, "")
         .toLowerCase();
 
-      if (venda.status !== "cancelada" || !motivo.includes("marcada em vermelho")) return true;
+      if (vendaSubstituidaPorImportacao(venda)) return false;
+      if (venda.status !== "cancelada") return true;
 
       const periodo = `${venda.data.slice(0, 7)}|${venda.quinzena}`;
       const importacaoMaisRecente = importacaoMaisRecentePorPeriodo.get(periodo);
@@ -76,13 +77,17 @@ export const deduplicarCancelamentosImportados = (vendas: Venda[]) => {
       if (
         importacaoMaisRecente &&
         Number.isFinite(canceladaEm) &&
-        importacaoMaisRecente - canceladaEm > 60_000
+        // A full import replaces the period, including earlier manual cancellations.
+        importacaoMaisRecente - canceladaEm > (motivo.includes("marcada em vermelho") ? 60_000 : 0)
       ) {
         return false;
       }
 
+      if (!motivo.includes("marcada em vermelho")) return true;
+
       const chave = [
         venda.representationId,
+        venda.collaboratorId,
         venda.data.slice(0, 10),
         Number(venda.valor).toFixed(2),
       ].join("|");
@@ -172,7 +177,12 @@ export const somaLucroPorPeriodo = (reps: Representacao[], periodo: DashboardPer
 export const somaCotas = (reps: Representacao[]) => reps.reduce((s, r) => s + cotasRep(r), 0);
 
 export const brl = (v: number) =>
-  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+  v.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 
 export const novoId = () => {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
