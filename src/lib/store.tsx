@@ -10,6 +10,7 @@ import {
 } from "@/lib/reps";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
+import { salesForImportReplacement } from "@/lib/sales-import-scope";
 
 type Ctx = {
   dados: DadosApp;
@@ -661,13 +662,10 @@ export function StoreProvider({
           setErro("A importação exige conexão com o banco de dados.");
           return false;
         }
-        const { error } = await supabase.rpc("replace_sales_import_batch_v2", {
+        const { error } = await supabase.rpc("replace_sales_import_batch_v3", {
           imported_sales: sales,
         });
-        if (
-          error &&
-          !/replace_sales_import_batch_v2|schema cache|could not find/i.test(error.message)
-        ) {
+        if (error && error.code !== "PGRST202") {
           setErro(error.message);
           return false;
         }
@@ -688,22 +686,7 @@ export function StoreProvider({
             cancelled_at: string | null;
           }> = [];
           for (const period of periods) {
-            const startDay = period.half === "quinzena1" ? "01" : "15";
-            const endDay = period.half === "quinzena1" ? "15" : "32";
-            const start = `${period.month}-${startDay}T00:00:00-03:00`;
-            const monthDate = new Date(`${period.month}-01T12:00:00`);
-            const followingMonth = new Date(monthDate);
-            followingMonth.setMonth(followingMonth.getMonth() + 1);
-            const end =
-              endDay === "15"
-                ? `${period.month}-15T00:00:00-03:00`
-                : `${followingMonth.getFullYear()}-${String(followingMonth.getMonth() + 1).padStart(2, "0")}-01T00:00:00-03:00`;
-            const existing = await supabase
-              .from("sales")
-              .select("id, status, cancellation_reason, cancelled_at")
-              .gte("sold_at", start)
-              .lt("sold_at", end)
-              .eq("half", period.half);
+            const existing = await salesForImportReplacement(supabase, period.month, period.half);
             if (existing.error) {
               setErro(existing.error.message);
               return false;

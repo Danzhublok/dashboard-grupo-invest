@@ -16,16 +16,16 @@ const sale = (id, valor, extra = {}) => ({
 });
 const current = [sale("plicia", 65577.45), sale("pablo", 789930.18), sale("helida", 402496)];
 
-test("full import supersedes old manual cancellations and restores the PDF totals", () => {
-  const old = [1, 2, 3].map((n) =>
-    sale(`old-${n}`, n * 100, {
-      motivoCancelamento: "Cancelamento registrado manualmente",
-      canceladaEm: "2026-10-12T15:00:00Z",
-    }),
-  );
-  const result = deduplicarCancelamentosImportados([...old, ...current]);
+test("manual cancellations remain visible until explicitly superseded", () => {
+  const old = sale("old-manual", 100, {
+    motivoCancelamento: "Erro de lançamento",
+    canceladaEm: "2026-10-08T15:00:00Z",
+  });
+  assert.equal(deduplicarCancelamentosImportados([...current, old]).length, 4);
+  const archived = { ...old, motivoCancelamento: "Substituída por nova importação" };
+  const result = deduplicarCancelamentosImportados([...current, archived]);
   assert.equal(result.length, 3);
-  const cancelled = result.reduce((s, r) => s + Math.round(r.valor * 100), 0);
+  const cancelled = result.reduce((sum, r) => sum + Math.round(r.valor * 100), 0);
   assert.equal(cancelled, 125800363);
   assert.equal(cancelled + 330116110, 455916473);
   assert.match(brl(4559164.73), /4\.559\.164,73/);

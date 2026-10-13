@@ -69,7 +69,7 @@ export const deduplicarCancelamentosImportados = (vendas: Venda[]) => {
         .toLowerCase();
 
       if (vendaSubstituidaPorImportacao(venda)) return false;
-      if (venda.status !== "cancelada") return true;
+      if (venda.status !== "cancelada" || !motivo.includes("marcada em vermelho")) return true;
 
       const periodo = `${venda.data.slice(0, 7)}|${venda.quinzena}`;
       const importacaoMaisRecente = importacaoMaisRecentePorPeriodo.get(periodo);
@@ -77,13 +77,10 @@ export const deduplicarCancelamentosImportados = (vendas: Venda[]) => {
       if (
         importacaoMaisRecente &&
         Number.isFinite(canceladaEm) &&
-        // A full import replaces the period, including earlier manual cancellations.
-        importacaoMaisRecente - canceladaEm > (motivo.includes("marcada em vermelho") ? 60_000 : 0)
+        importacaoMaisRecente - canceladaEm > 60_000
       ) {
         return false;
       }
-
-      if (!motivo.includes("marcada em vermelho")) return true;
 
       const chave = [
         venda.representationId,
