@@ -33,6 +33,7 @@ import {
   quinzena1Rep,
   quinzena2Rep,
   somaCotas,
+  somaLucroPorPeriodo,
   vendaSubstituidaPorImportacao,
   type DashboardPeriod,
 } from "@/lib/reps";
@@ -103,9 +104,7 @@ function Dashboard() {
       venda.data.startsWith(mesSelecionado) &&
       (periodoSelecionado === "geral" || venda.quinzena === periodoSelecionado),
   );
-  const ganhoLiquidoVendas = vendasDoPeriodo
-    .filter((venda) => venda.status === "ativa")
-    .reduce((total, venda) => total + Number(venda.valor || 0), 0);
+  const ganhoLiquidoVendas = somaLucroPorPeriodo(representacoes, periodoSelecionado);
   const saidasMes = dados.saidas.filter((saida) => saida.data.startsWith(mesSelecionado));
   const saidasAnterior = dados.saidas.filter((saida) =>
     saida.data.startsWith(mesAnterior(mesSelecionado)),
