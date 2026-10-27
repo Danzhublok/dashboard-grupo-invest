@@ -293,7 +293,7 @@ function singleTablePdfRows(
         .map((item) => item.text.trim())
         .join(" ");
 
-    return [...new Set(items.filter((item) => item.y < header).map((item) => item.y))]
+    const tableRows = [...new Set(items.filter((item) => item.y < header).map((item) => item.y))]
       .sort((a, b) => b - a)
       .flatMap((row) => {
         const date = parseDate(valueAt(row, columns.date));
@@ -302,6 +302,7 @@ function singleTablePdfRows(
         if (!date || !Number.isFinite(amount) || amount <= 0) return [];
         return [
           {
+            sourceRow: row,
             row: pageNumber * 10_000 + row * headers.length + tableIndex,
             date: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`,
             manager: valueAt(row, columns.manager),
@@ -314,6 +315,44 @@ function singleTablePdfRows(
           },
         ];
       });
+    const footerTotals = [
+      ...new Set(
+        items
+          .filter(
+            (item) =>
+              tableRows.length > 0 &&
+              item.y < Math.min(...tableRows.map((sale) => sale.sourceRow)),
+          )
+          .map((item) => item.y),
+      ),
+    ]
+      .sort((a, b) => b - a)
+      .map((row) => parseAmount(valueAt(row, columns.amount)))
+      .filter((amount) => Number.isFinite(amount) && amount > 0);
+
+    if (footerTotals.length >= 2) {
+      const cents = (amount: number) => Math.round(amount * 100);
+      const formatBRL = (amount: number) =>
+        (cents(amount) / 100).toLocaleString("pt-BR", {
+          style: "currency",
+          currency: "BRL",
+        });
+      const gross = tableRows.reduce((total, sale) => total + cents(sale.amount), 0);
+      const net = tableRows.reduce(
+        (total, sale) => total + (sale.status === "ativa" ? cents(sale.amount) : 0),
+        0,
+      );
+      const reportedGross = cents(footerTotals[0]);
+      const reportedNet = cents(footerTotals[1]);
+
+      if (Math.abs(gross - reportedGross) > 1 || Math.abs(net - reportedNet) > 1) {
+        throw new Error(
+          `Os valores lidos nesta tabela não conferem com o PDF. Bruto: ${formatBRL(gross / 100)} (PDF: ${formatBRL(reportedGross / 100)}); líquido: ${formatBRL(net / 100)} (PDF: ${formatBRL(reportedNet / 100)}). Revise a planilha antes de importar.`,
+        );
+      }
+    }
+
+    return tableRows.map(({ sourceRow: _sourceRow, ...sale }) => sale);
   });
 }
 
