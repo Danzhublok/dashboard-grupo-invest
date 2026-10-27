@@ -225,83 +225,96 @@ function singleTablePdfRows(
   verticalLines: PdfVerticalLine[],
   pageNumber: number,
 ) {
-  const header = [...new Set(items.map((item) => item.y))]
+  const requiredLabels = [
+    "data",
+    "gerente",
+    "consultor",
+    "consorciado",
+    "clientepagante",
+    "valordocredito",
+    "valordeentrada",
+  ];
+  const headers = [...new Set(items.map((item) => item.y))]
     .sort((a, b) => b - a)
-    .find((y) => {
-      const labels = items.filter((item) => item.y === y).map((item) => normalize(item.text));
-      return [
-        "data",
-        "gerente",
-        "consultor",
-        "consorciado",
-        "clientepagante",
-        "valordocredito",
-        "valordeentrada",
-      ].every((label) => labels.includes(label));
+    .flatMap((header) => {
+      const groups: PositionedText[][] = [];
+      for (const item of items
+        .filter((candidate) => candidate.y === header)
+        .sort((a, b) => a.x - b.x)) {
+        if (normalize(item.text) === "data") groups.push([item]);
+        else groups.at(-1)?.push(item);
+      }
+      return groups
+        .filter((group) => {
+          const labels = group.map((item) => normalize(item.text));
+          return requiredLabels.every((label) => labels.includes(label));
+        })
+        .map((heading) => ({ header, heading }));
     });
-  if (header === undefined) return null;
+  if (!headers.length) return null;
 
-  const heading = items.filter((item) => item.y === header);
-  const xOf = (label: string) => heading.find((item) => normalize(item.text) === label)!.x;
-  const dateX = xOf("data");
-  const managerX = xOf("gerente");
-  const collaboratorX = xOf("consultor");
-  const customerX = xOf("consorciado");
-  const payerX = xOf("clientepagante");
-  const amountX = xOf("valordocredito");
-  const entryX = xOf("valordeentrada");
-  const boundary = (left: number, right: number) => (left + right) / 2;
-  // Titles can be centered in cells of very different widths. Use the drawn
-  // cell borders instead of the midpoint between title starting positions.
-  const edges = [
-    ...new Set(
-      verticalLines
-        .filter((line) => header >= line.minY - 1 && header <= line.maxY + 1)
-        .map((line) => line.x),
-    ),
-  ].sort((a, b) => a - b);
-  const columnAt = (x: number, fallback: number[]) => {
-    const from = edges.filter((edge) => edge < x).at(-1);
-    const to = edges.find((edge) => edge > x);
-    return from !== undefined && to !== undefined ? [from, to] : fallback;
-  };
-  const columns = {
-    date: columnAt(dateX, [-Infinity, boundary(dateX, managerX)]),
-    manager: columnAt(managerX, [boundary(dateX, managerX), boundary(managerX, collaboratorX)]),
-    collaborator: columnAt(collaboratorX, [
-      boundary(managerX, collaboratorX),
-      boundary(collaboratorX, customerX),
-    ]),
-    amount: columnAt(amountX, [boundary(payerX, amountX), boundary(amountX, entryX)]),
-  };
-  const valueAt = (row: number, [from, to]: number[]) =>
-    items
-      .filter((item) => item.y === row && item.x >= from && item.x < to && item.text.trim())
-      .sort((a, b) => a.x - b.x)
-      .map((item) => item.text.trim())
-      .join(" ");
+  return headers.flatMap(({ header, heading }, tableIndex) => {
+    const xOf = (label: string) => heading.find((item) => normalize(item.text) === label)!.x;
+    const dateX = xOf("data");
+    const managerX = xOf("gerente");
+    const collaboratorX = xOf("consultor");
+    const customerX = xOf("consorciado");
+    const payerX = xOf("clientepagante");
+    const amountX = xOf("valordocredito");
+    const entryX = xOf("valordeentrada");
+    const boundary = (left: number, right: number) => (left + right) / 2;
+    // Titles can be centered in cells of very different widths. Use the drawn
+    // cell borders instead of the midpoint between title starting positions.
+    const edges = [
+      ...new Set(
+        verticalLines
+          .filter((line) => header >= line.minY - 1 && header <= line.maxY + 1)
+          .map((line) => line.x),
+      ),
+    ].sort((a, b) => a - b);
+    const columnAt = (x: number, fallback: number[]) => {
+      const from = edges.filter((edge) => edge < x).at(-1);
+      const to = edges.find((edge) => edge > x);
+      return from !== undefined && to !== undefined ? [from, to] : fallback;
+    };
+    const columns = {
+      date: columnAt(dateX, [-Infinity, boundary(dateX, managerX)]),
+      manager: columnAt(managerX, [boundary(dateX, managerX), boundary(managerX, collaboratorX)]),
+      collaborator: columnAt(collaboratorX, [
+        boundary(managerX, collaboratorX),
+        boundary(collaboratorX, customerX),
+      ]),
+      amount: columnAt(amountX, [boundary(payerX, amountX), boundary(amountX, entryX)]),
+    };
+    const valueAt = (row: number, [from, to]: number[]) =>
+      items
+        .filter((item) => item.y === row && item.x >= from && item.x < to && item.text.trim())
+        .sort((a, b) => a.x - b.x)
+        .map((item) => item.text.trim())
+        .join(" ");
 
-  return [...new Set(items.filter((item) => item.y < header).map((item) => item.y))]
-    .sort((a, b) => b - a)
-    .flatMap((row) => {
-      const date = parseDate(valueAt(row, columns.date));
-      const amount = parseAmount(valueAt(row, columns.amount));
-      const collaborator = valueAt(row, columns.collaborator);
-      if (!date || !Number.isFinite(amount) || amount <= 0) return [];
-      return [
-        {
-          row: pageNumber * 10_000 + row,
-          date: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`,
-          manager: valueAt(row, columns.manager),
-          collaborator,
-          amount: Math.round(amount * 100) / 100,
-          half: date.getDate() <= 14 ? ("quinzena1" as const) : ("quinzena2" as const),
-          status: isInRedRegion(regions, row, collaboratorX)
-            ? ("cancelada" as const)
-            : ("ativa" as const),
-        },
-      ];
-    });
+    return [...new Set(items.filter((item) => item.y < header).map((item) => item.y))]
+      .sort((a, b) => b - a)
+      .flatMap((row) => {
+        const date = parseDate(valueAt(row, columns.date));
+        const amount = parseAmount(valueAt(row, columns.amount));
+        const collaborator = valueAt(row, columns.collaborator);
+        if (!date || !Number.isFinite(amount) || amount <= 0) return [];
+        return [
+          {
+            row: pageNumber * 10_000 + row * headers.length + tableIndex,
+            date: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`,
+            manager: valueAt(row, columns.manager),
+            collaborator,
+            amount: Math.round(amount * 100) / 100,
+            half: date.getDate() <= 14 ? ("quinzena1" as const) : ("quinzena2" as const),
+            status: isInRedRegion(regions, row, collaboratorX)
+              ? ("cancelada" as const)
+              : ("ativa" as const),
+          },
+        ];
+      });
+  });
 }
 
 function pdfRow(items: PositionedText[], row: number, side: "left" | "right") {
