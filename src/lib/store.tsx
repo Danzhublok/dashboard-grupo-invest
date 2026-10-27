@@ -804,6 +804,126 @@ export function StoreProvider({
             }
           }
         }
+        const periods = [
+          ...new Map(
+            sales.map((sale) => {
+              const month = sale.date.slice(0, 7);
+              const half = Number(sale.date.slice(8, 10)) <= 14 ? "quinzena1" : "quinzena2";
+              return [`${month}-${half}`, { month, half }] as const;
+            }),
+          ).values(),
+        ];
+        const staleSaleIds: string[] = [];
+        for (const period of periods) {
+          const monthDate = new Date(`${period.month}-01T12:00:00`);
+          monthDate.setMonth(monthDate.getMonth() + 1);
+          const nextMonth = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, "0")}-01`;
+          const start = `${period.month}-${period.half === "quinzena1" ? "01" : "15"}T00:00:00-03:00`;
+          const end =
+            period.half === "quinzena1"
+              ? `${period.month}-15T00:00:00-03:00`
+              : `${nextMonth}T00:00:00-03:00`;
+          const activeSales = await supabase
+            .from("sales")
+            .select("id, representation_id, collaborator_id, amount, sold_at")
+            .gte("sold_at", start)
+            .lt("sold_at", end)
+            .eq("status", "ativa");
+          if (activeSales.error) {
+            setErro(activeSales.error.message);
+            return false;
+          }
+
+          const expected = new Map<string, number>();
+          for (const sale of sales) {
+            const half = Number(sale.date.slice(8, 10)) <= 14 ? "quinzena1" : "quinzena2";
+            if (
+              sale.date.slice(0, 7) !== period.month ||
+              half !== period.half ||
+              sale.status !== "ativa"
+            ) {
+              continue;
+            }
+            const key = [
+              sale.representationId,
+              sale.collaboratorId,
+              sale.date,
+              Math.round(sale.amount * 100),
+            ].join("|");
+            expected.set(key, (expected.get(key) ?? 0) + 1);
+          }
+
+          for (const sale of activeSales.data ?? []) {
+            const key = [
+              sale.representation_id,
+              sale.collaborator_id,
+              sale.sold_at.slice(0, 10),
+              Math.round(Number(sale.amount) * 100),
+            ].join("|");
+            const count = expected.get(key) ?? 0;
+            if (count > 0) expected.set(key, count - 1);
+            else staleSaleIds.push(sale.id);
+          }
+        }
+
+        if (staleSaleIds.length) {
+          const cancellation = await supabase
+            .from("sales")
+            .update({
+              status: "cancelada",
+              cancellation_reason: "Substituída por nova importação",
+              cancelled_at: new Date().toISOString(),
+            })
+            .in("id", staleSaleIds);
+          if (cancellation.error) {
+            setErro(cancellation.error.message);
+            return false;
+          }
+
+          const months = [...new Set(periods.map((period) => period.month))];
+          for (const month of months) {
+            const monthDate = new Date(`${month}-01T12:00:00`);
+            monthDate.setMonth(monthDate.getMonth() + 1);
+            const nextMonth = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, "0")}-01`;
+            const activeSales = await supabase
+              .from("sales")
+              .select("collaborator_id, amount, half")
+              .gte("sold_at", `${month}-01T00:00:00-03:00`)
+              .lt("sold_at", `${nextMonth}T00:00:00-03:00`)
+              .eq("status", "ativa");
+            if (activeSales.error) {
+              setErro(activeSales.error.message);
+              return false;
+            }
+            const totals = new Map<string, { first: number; second: number; quotas: number }>();
+            for (const sale of activeSales.data ?? []) {
+              const total = totals.get(sale.collaborator_id) ?? { first: 0, second: 0, quotas: 0 };
+              if (sale.half === "quinzena1") total.first += Number(sale.amount);
+              else total.second += Number(sale.amount);
+              total.quotas += 1;
+              totals.set(sale.collaborator_id, total);
+            }
+            const results = dadosVisiveis.representacoes.flatMap((rep) =>
+              rep.colaboradores.map((collaborator) => {
+                const total = totals.get(collaborator.id) ?? { first: 0, second: 0, quotas: 0 };
+                return {
+                  collaborator_id: collaborator.id,
+                  month: `${month}-01`,
+                  first_half: total.first,
+                  second_half: total.second,
+                  quotas: total.quotas,
+                };
+              }),
+            );
+            const recalculated = await supabase
+              .from("collaborator_results")
+              .upsert(results, { onConflict: "collaborator_id,month" });
+            if (recalculated.error) {
+              setErro(recalculated.error.message);
+              return false;
+            }
+          }
+        }
         setErro(null);
         const month = sales[0]?.date.slice(0, 7);
         if (month && month !== mesSelecionado) setMesSelecionado(month);
