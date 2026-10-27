@@ -333,7 +333,22 @@ function singleTablePdfRows(
           },
         ];
       });
-    return tableRows;
+    const monthCounts = tableRows.reduce((counts, sale) => {
+      const month = sale.date.slice(0, 7);
+      counts.set(month, (counts.get(month) ?? 0) + 1);
+      return counts;
+    }, new Map<string, number>());
+    const dominantPeriod = [...monthCounts].sort((a, b) => b[1] - a[1])[0];
+
+    if (!dominantPeriod) return tableRows;
+    const [dominantMonth, dominantCount] = dominantPeriod;
+    if (dominantCount < Math.ceil(tableRows.length * 0.8)) return tableRows;
+
+    return tableRows.map((sale) => {
+      const [, month, day] = sale.date.split("-");
+      if (sale.date.slice(5, 7) !== dominantMonth.slice(5, 7)) return sale;
+      return { ...sale, date: `${dominantMonth.slice(0, 4)}-${month}-${day}` };
+    });
   });
 }
 
