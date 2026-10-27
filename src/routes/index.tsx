@@ -33,7 +33,6 @@ import {
   quinzena1Rep,
   quinzena2Rep,
   somaCotas,
-  somaLucroPorPeriodo,
   vendaSubstituidaPorImportacao,
   type DashboardPeriod,
 } from "@/lib/reps";
@@ -99,7 +98,14 @@ function Dashboard() {
   const { session } = useAuth();
   const [periodoSelecionado, setPeriodoSelecionado] = useState<DashboardPeriod>("geral");
   const representacoes = dados.representacoes;
-  const ganhoLiquidoVendas = somaLucroPorPeriodo(representacoes, periodoSelecionado);
+  const vendasDoPeriodo = dados.vendas.filter(
+    (venda) =>
+      venda.data.startsWith(mesSelecionado) &&
+      (periodoSelecionado === "geral" || venda.quinzena === periodoSelecionado),
+  );
+  const ganhoLiquidoVendas = vendasDoPeriodo
+    .filter((venda) => venda.status === "ativa")
+    .reduce((total, venda) => total + Number(venda.valor || 0), 0);
   const saidasMes = dados.saidas.filter((saida) => saida.data.startsWith(mesSelecionado));
   const saidasAnterior = dados.saidas.filter((saida) =>
     saida.data.startsWith(mesAnterior(mesSelecionado)),
@@ -109,12 +115,11 @@ function Dashboard() {
   const cotasTotais = somaCotas(representacoes);
   const ticketMedio = cotasTotais ? Math.round(ganhoLiquidoVendas / cotasTotais) : 0;
   const vendasCanceladas = deduplicarCancelamentosImportados(
-    dados.vendas.filter(
+    vendasDoPeriodo.filter(
       (venda) =>
         venda.status === "cancelada" &&
         !vendaSubstituidaPorImportacao(venda) &&
-        venda.data.startsWith(mesSelecionado) &&
-        (periodoSelecionado === "geral" || venda.quinzena === periodoSelecionado),
+        venda.data.startsWith(mesSelecionado),
     ),
   );
   const valorCancelado = vendasCanceladas.reduce(
